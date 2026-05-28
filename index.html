@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a4480">
+<title>Dios Azul CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+:root {
+  --bg:#fafaf7; --bg2:#f0efea; --surface:#ffffff; --surface2:#fafaf6;
+  --border:#e3e1da; --border-mid:#c4c2b9;
+  --text:#0a2447; --text-mid:#2d4570; --text-dim:#6b7a90;
+  --sky:#4a90d9; --sky-light:#bcd6ef;
+  --navy:#1a4480; --navy-dark:#0a2447; --navy-light:#e8eef7;
+  --gold:#c9a961; --gold-dark:#a8893f; --gold-light:#f7efd9;
+  --green:#1a6b3c; --green-bg:#f0f7f3; --green-border:rgba(26,107,60,0.2);
+  --blue1:#1a4480; --blue2:#0a2447; --blue-light:#e8eef7; --blue-chip:rgba(26,68,128,0.2);
+  --warn:#a8893f; --warn-bg:#f7efd9;
+  --lead-accent:#c9a961;
+  --gradient-blue: linear-gradient(135deg, #4a90d9 0%, #1a4480 50%, #0a2447 100%);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); font-family:"Inter",sans-serif; -webkit-font-smoothing:antialiased; color:var(--text); }
+.crm-root { max-width:780px; margin:0 auto; padding:0 0 80px; background:var(--bg); min-height:100vh; }
+.crm-header { background:var(--gradient-blue); color:#fff; padding:20px 24px 16px; display:flex; justify-content:space-between; align-items:flex-start; position:sticky; top:0; z-index:100; }
+.logo-wordmark { font-family:"Cormorant Garamond",serif; font-size:22px; font-weight:700; letter-spacing:0.12em; color:#fff; }
+.logo-sub { font-size:9px; letter-spacing:0.18em; color:var(--gold); margin-top:2px; text-transform:uppercase; font-style:italic; }
+.tab-row { display:flex; gap:0; border-bottom:1px solid var(--border); background:var(--surface); padding:0 16px; overflow-x:auto; position:sticky; top:72px; z-index:99; }
+.tab { background:none; border:none; border-bottom:2px solid transparent; padding:12px 14px; font-family:"DM Mono",monospace; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); cursor:pointer; white-space:nowrap; transition:all 0.15s; }
+.tab.active { color:var(--navy); border-bottom-color:var(--navy); }
+.tab-badge { background:var(--bg2); color:var(--text-mid); font-size:9px; padding:1px 6px; margin-left:4px; }
+.tab.active .tab-badge { background:var(--navy); color:#fff; }
+.content { padding:20px 20px; }
+.controls { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+.search-input { flex:1; min-width:180px; padding:9px 12px; border:1px solid var(--border); background:var(--surface); font-family:"DM Mono",monospace; font-size:11px; color:var(--text); outline:none; }
+.filter-btn { padding:6px 12px; border:1px solid var(--border); background:var(--surface); font-family:"DM Mono",monospace; font-size:9px; letter-spacing:0.1em; color:var(--text-dim); cursor:pointer; text-transform:uppercase; }
+.filter-btn.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+.select-mode-btn { background:none; border:1px solid var(--border-mid); color:var(--text-dim); padding:6px 12px; font-family:"DM Mono",monospace; font-size:9px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+.select-mode-btn.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+.count-label { font-size:9px; letter-spacing:0.14em; color:var(--text-dim); text-transform:uppercase; margin-bottom:10px; }
+.card { background:var(--surface); border:1px solid var(--border); border-left:3px solid transparent; padding:14px 18px; margin-bottom:6px; cursor:pointer; }
+.card.acct { border-left-color:var(--navy); }
+.card.lead { border-left-color:var(--lead-accent); }
+.card.inv  { border-left-color:var(--green); }
+.card.selected { background:var(--navy-light); border-color:var(--navy); }
+.card-row { display:flex; gap:12px; align-items:center; }
+.card-name { font-family:"Cormorant Garamond",serif; font-size:17px; font-weight:600; color:var(--text); }
+.card-meta { font-size:10px; color:var(--text-dim); margin-top:3px; }
+.card-amt  { text-align:right; flex-shrink:0; font-size:13px; color:var(--navy); font-weight:600; }
+.card-date { font-size:10px; color:var(--text-dim); margin-top:2px; }
+.type-chip { font-size:9px; padding:2px 7px; border:1px solid var(--border); color:var(--text-dim); letter-spacing:0.08em; flex-shrink:0; }
+.lead-chip { font-size:9px; padding:2px 7px; background:var(--gold-light); border:1px solid rgba(201,169,97,0.4); color:var(--gold-dark); letter-spacing:0.08em; flex-shrink:0; font-weight:600; }
+.checkbox { width:18px; height:18px; border:1.5px solid var(--border-mid); border-radius:3px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; background:#fff; }
+.checkbox.checked { background:var(--navy); border-color:var(--navy); }
+.checkbox.checked::after { content:"\2713"; color:#fff; font-size:12px; font-weight:700; }
+.selection-bar { position:sticky; top:112px; z-index:90; background:var(--navy); color:#fff; padding:10px 16px; display:flex; gap:10px; align-items:center; margin:0 -20px 14px; flex-wrap:wrap; }
+.selection-bar .count { font-family:"Cormorant Garamond",serif; font-size:18px; font-weight:600; }
+.selection-bar .label { font-family:"DM Mono",monospace; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(255,255,255,0.7); margin-right:auto; }
+.bulk-btn { background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.3); color:#fff; padding:6px 12px; font-family:"DM Mono",monospace; font-size:9px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+.bulk-btn.danger { background:rgba(192,57,43,0.25); border-color:rgba(192,57,43,0.5); }
+.kpi-row { display:flex; gap:12px; margin-bottom:22px; flex-wrap:wrap; }
+.kpi { background:var(--surface); border:1px solid var(--border); padding:14px 18px; flex:1 1 130px; }
+.kpi-label { font-size:9px; color:var(--text-dim); letter-spacing:0.12em; text-transform:uppercase; margin-bottom:4px; }
+.kpi-val { font-family:"Cormorant Garamond",serif; font-size:24px; font-weight:700; color:var(--navy); }
+.kpi-val.green { color:var(--green); }
+.kpi-val.warm  { color:var(--warn); }
+.kpi-sub { font-size:10px; color:var(--text-dim); margin-top:2px; }
+.section-title { font-size:9px; letter-spacing:0.14em; color:var(--text-dim); text-transform:uppercase; margin:20px 0 10px; }
+.rpt-bar-row { background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--navy); padding:14px 18px; margin-bottom:6px; }
+.rpt-bar-row.green { border-left-color:var(--green); }
+.rpt-bar-row.warm  { border-left-color:var(--warn); }
+.rpt-row-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.rpt-name { font-family:"Cormorant Garamond",serif; font-size:16px; font-weight:600; color:var(--text); }
+.rpt-amt  { font-family:"DM Mono",monospace; font-size:13px; font-weight:500; }
+.rpt-meta { font-size:10px; color:var(--text-dim); }
+.bar-track { background:var(--bg2); border-radius:2px; height:5px; margin-bottom:6px; }
+.bar-fill  { height:5px; border-radius:2px; background:var(--navy); }
+.bar-fill.green { background:var(--green); }
+.form-wrap { padding:0 20px 20px; }
+.form-title { font-family:"Cormorant Garamond",serif; font-size:20px; font-weight:700; color:var(--navy); padding:16px 20px 12px; }
+.fr { display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+.fr > div { flex:1 1 200px; }
+.fr1 > div { width:100%; }
+.fl { display:block; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:5px; }
+.fi { width:100%; padding:9px 10px; border:1px solid var(--border); background:var(--surface); font-family:"DM Mono",monospace; font-size:11px; color:var(--text); outline:none; }
+.fs { width:100%; padding:9px 10px; border:1px solid var(--border); background:var(--surface); font-family:"DM Mono",monospace; font-size:11px; color:var(--text); outline:none; }
+.fta { width:100%; padding:9px 10px; border:1px solid var(--border); background:var(--surface); font-family:"DM Mono",monospace; font-size:11px; color:var(--text); outline:none; min-height:80px; resize:vertical; }
+.action-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }
+.btn-primary { padding:10px 20px; background:var(--navy); color:#fff; border:none; font-family:"DM Mono",monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+.btn-secondary { padding:10px 20px; background:none; color:var(--text-mid); border:1px solid var(--border); font-family:"DM Mono",monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+.btn-del { padding:10px 20px; background:none; color:#c0392b; border:1px solid rgba(192,57,43,0.3); font-family:"DM Mono",monospace; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+.btn-ghost { background:none; border:none; font-family:"DM Mono",monospace; font-size:10px; letter-spacing:0.1em; color:var(--text-dim); cursor:pointer; padding:16px 20px 0; text-transform:uppercase; }
+.expr-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:2px; }
+.expr-btn { padding:8px 14px; border:1px solid var(--border-mid); background:var(--surface); font-family:"DM Mono",monospace; font-size:10px; letter-spacing:0.08em; color:var(--text-mid); cursor:pointer; text-transform:uppercase; border-radius:2px; }
+.expr-btn.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+.empty-state { background:var(--surface2); border:1px solid var(--border); padding:32px 24px; text-align:center; }
+.empty-title { font-family:"Cormorant Garamond",serif; font-size:20px; color:var(--text-mid); margin-bottom:8px; }
+.empty-sub { font-size:11px; color:var(--text-dim); margin-bottom:20px; }
+.save-toast { position:fixed; bottom:24px; right:20px; background:var(--navy); color:#fff; font-family:"DM Mono",monospace; font-size:10px; letter-spacing:0.1em; padding:8px 16px; opacity:0; transition:opacity 0.3s; pointer-events:none; z-index:9999; }
+.save-toast.show { opacity:1; }
+.divider { border:none; border-top:1px solid var(--border); margin:4px 0 20px; }
+.sync-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
+.sync-dot.on { background:#4ade80; }
+.sync-dot.off { background:#9ca3af; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+ 
+const ACCOUNTS_INIT = [
+  {id:1,  name:"Zacapa Mexican Restaurant & Bar",  type:"Restaurant", city:"Lake Mary, FL",            address:"7025 County Rd. 46A, Suite 1011, Lake Mary, FL 32746",     contact:"Paticia",          phone:"",               email:"",                          lastContact:"2025-02-07", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:2,  name:"Twisted Rooster Bar",              type:"Bar",        city:"West Melbourne, FL",       address:"1220 W New Haven Ave, Suite 150, West Melbourne, FL 32904", contact:"",                 phone:"(321) 266-5360", email:"",                          lastContact:"2025-10-20", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:3,  name:"Tide & Tonic",                     type:"Bar",        city:"Indian Harbour Beach, FL", address:"1940 Highway A1A, Indian Harbour Beach, FL 32937",          contact:"Stefanie",         phone:"(321) 425-2281", email:"",                          lastContact:"2025-10-02", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:4,  name:"Social Distance",                  type:"Bar",        city:"Satellite Beach, FL",      address:"1680 Highway A1A, Suite 3, Satellite Beach, FL 32937",      contact:"",                 phone:"",               email:"",                          lastContact:"2025-12-31", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:5,  name:"Nomads Canteen",                   type:"Restaurant", city:"Melbourne, FL",            address:"617 W. Eau Gallie Blvd, Melbourne, FL 32935",               contact:"",                 phone:"(321) 600-4353", email:"",                          lastContact:"2025-02-07", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:6,  name:"Midtown Liquors MI",               type:"Retail",     city:"Merritt Island, FL",       address:"6100 N Courtenay Pkwy., Merritt Island, FL 32953",          contact:"",                 phone:"",               email:"",                          lastContact:"2025-08-25", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:7,  name:"Mayfair Country Club",             type:"Restaurant", city:"Sanford, FL",              address:"3536 Country Club Rd., Sanford, FL 32773",                  contact:"Scott Bennett",    phone:"",               email:"",                          lastContact:"2025-05-14", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:8,  name:"Legacy Liquors",                   type:"Retail",     city:"Sanford, FL",              address:"200 S French Ave, Sanford, FL 32771",                       contact:"",                 phone:"",               email:"",                          lastContact:"2025-04-22", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:9,  name:"Kiwi Tennis Club, LLC",            type:"Bar",        city:"Indian Harbour Beach, FL", address:"30 Tradewinds Dr., Indian Harbour Beach, FL 32937",         contact:"Jeff",             phone:"",               email:"jeffnw44@gmail.com",        lastContact:"2025-09-04", nextFollowUp:"2026-05-18", products:"",               notes:"", activityLog:[{date:"2026-05-06",type:"Visit",note:"Visited and met with Jeff. Scheduled follow-up meeting Monday May 18, 2026 at 2:00 PM."}]},
+  {id:10, name:"Key West Bar",                     type:"Bar",        city:"Indian Harbour Beach, FL", address:"2286 Highway A1A, Indian Harbour Beach, FL 32937",          contact:"Kelly",            phone:"(321) 773-1577", email:"",                          lastContact:"2025-10-31", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:11, name:"Johnathon's Pub",                  type:"Bar",        city:"Cocoa Beach, FL",          address:"140 N. Brevard Ave., Cocoa Beach, FL 32931",                contact:"",                 phone:"(321) 783-9368", email:"daniel-brewer@live.com",   lastContact:"2025-10-02", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:12, name:"Jimmy Hulas of New Smyrna Beach",  type:"Restaurant", city:"New Smyrna Beach, FL",     address:"151 Canal St., New Smyrna Beach, FL 32168",                 contact:"",                 phone:"",               email:"",                          lastContact:"2025-06-11", nextFollowUp:"", products:"Plata",          notes:"", activityLog:[]},
+  {id:13, name:"Jimmy Hulas @ Pineda Crossing",    type:"Restaurant", city:"Melbourne, FL",            address:"2515 Roberts Rd., Melbourne, FL 32940",                     contact:"Kat (GM) / Zack (Bar Manager)",  phone:"(321) 298-6554", email:"",                          lastContact:"2025-09-11", nextFollowUp:"", products:"",               notes:"License: BEV1507874.", activityLog:[{date:"2026-05-27",type:"Order",note:"Order placed: 1 case Extra Añejo @ $584.94. License BEV1507874 confirmed. New contacts: Kat (GM), Zack (Bar Manager)."}]},
+  {id:14, name:"Jimmy Hula's of Port Orange",      type:"Restaurant", city:"Port Orange, FL",          address:"65 Dunlawton Ave., Port Orange, FL 32127",                  contact:"",                 phone:"",               email:"",                          lastContact:"2025-06-11", nextFollowUp:"", products:"Plata",          notes:"", activityLog:[]},
+  {id:15, name:"Jimmy Hula's of Ormond Beach",     type:"Restaurant", city:"Ormond Beach, FL",         address:"191 E. Granada Blvd., Ormond Beach, FL 32176",              contact:"",                 phone:"",               email:"",                          lastContact:"2025-06-11", nextFollowUp:"", products:"Plata, Reposado", notes:"", activityLog:[]},
+  {id:16, name:"Iron Oak Post",                    type:"Bar",        city:"Melbourne, FL",            address:"2023 Melbourne Ct, Melbourne, FL 32901",                    contact:"",                 phone:"",               email:"derek@ironoakpost.com",     lastContact:"2025-10-20", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:17, name:"Hunker Down Lounge Hideaway",      type:"Bar",        city:"Cocoa Beach, FL",          address:"1 & 7 S Atlantic Ave, STE 7C-9, Cocoa Beach, FL 32931",     contact:"Katrina Northrup", phone:"",               email:"knorthrup227@gmail.com",    lastContact:"2025-10-22", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:18, name:"Hotel Melby",                      type:"Hotel",      city:"Melbourne, FL",            address:"801 E Strawbridge Ave., Melbourne, FL 32901",               contact:"Larry Ayala",      phone:"",               email:"larry.ayala@aimbridge.com", lastContact:"2025-04-30", nextFollowUp:"", products:"Plata",          notes:"Managed by Aimbridge Hospitality.", activityLog:[]},
+  {id:19, name:"George & Dragon English Tavern",   type:"Bar",        city:"Cocoa, FL",                address:"502 Brevard Ave, Cocoa, FL 32922",                          contact:"David Lemon",      phone:"(727) 412-1303", email:"dlemon@kw.com",            lastContact:"2025-07-21", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:20, name:"Florida Cork & Bottle",            type:"Retail",     city:"Indian Harbour Beach, FL", address:"1916 Highway A1A, Indian Harbour Beach, FL 32937",          contact:"Russ (Owner) / Ramon (Cashier)",  phone:"(321) 508-3559",               email:"",                          lastContact:"2025-08-29", nextFollowUp:"", products:"",               notes:"", activityLog:[{date:"2026-05-06",type:"Visit",note:"Placed order: 1 Plata + 1 Añejo + 1 Extra Añejo (3-case tier, $1,049.82). Confirmed BEV1500102, Sales Tax 15-8018580753-3. Owner: Russ. Sampling event to be set up upon delivery."}]},
+  {id:21, name:"Fishlips Waterfront Bar & Grill",  type:"Restaurant", city:"Pt. Canaveral, FL",        address:"610 Glen Cheek Drive, Pt. Canaveral, FL 32920",             contact:"",                 phone:"",               email:"",                          lastContact:"2025-04-03", nextFollowUp:"", products:"Reposado",        notes:"", activityLog:[]},
+  {id:22, name:"EZ Liquors",                       type:"Retail",     city:"Sanford, FL",              address:"4101 W. State Rd. 46, Sanford, FL 32773",                   contact:"",                 phone:"407-324-8977",   email:"",                          lastContact:"2025-05-14", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:23, name:"County Line Bar & Grill",          type:"Restaurant", city:"Melbourne, FL",            address:"815 E Strawbridge Ave, Melbourne, FL 32901",                contact:"Hunter Benninger", phone:"",               email:"",                          lastContact:"2025-11-03", nextFollowUp:"", products:"Plata, Reposado", notes:"", activityLog:[]},
+  {id:24, name:"Chumley's Depot",                  type:"Bar",        city:"Melbourne, FL",            address:"1929 Depot Dr., Melbourne, FL 32901",                       contact:"",                 phone:"",               email:"",                          lastContact:"2025-11-25", nextFollowUp:"", products:"Reposado",        notes:"", activityLog:[]},
+  {id:25, name:"Brevardian Riverfront LLC",        type:"Bar",        city:"Melbourne, FL",            address:"2459 Pineapple Ave, Melbourne, FL 32935",                   contact:"Nick",             phone:"",               email:"",                          lastContact:"2025-10-02", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:26, name:"Bahala LLC",                       type:"Bar",        city:"Sanford, FL",              address:"2013 S French St, Sanford, FL 32771",                       contact:"",                 phone:"",               email:"",                          lastContact:"2025-02-27", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
+  {id:27, name:"Azteca Two",                       type:"Restaurant", city:"Cocoa Beach, FL",          address:"1600 N. Atlantic Ave., Cocoa Beach, FL 32931",              contact:"",                 phone:"(321) 784-1188", email:"phinronny@hotmail.com",    lastContact:"",           nextFollowUp:"", products:"Plata, Reposado", notes:"", activityLog:[]},
+  {id:28, name:"Tori Bar", type:"Bar", city:"Tampa, FL", address:"442 W. Kennedy Blvd, Ste. 190, Tampa, FL 33606", contact:"", phone:"", email:"Bradcanarie@Rocketspiritslllc.com", lastContact:"2025-04-02", nextFollowUp:"", products:"Plata", notes:"", activityLog:[]},
+  {id:29, name:"Element Melbourne Oceanfront (Ebb and Flow Bar)", type:"Hotel", city:"Melbourne, FL", address:"2655 N Hwy A1A, Melbourne, FL 32903", contact:"Ruthie deBlanc (Beverage & Food Manager) / Emily (Bartender)", phone:"(321) 775-0075", email:"rdeblanc@elementmelbourneoceanfront.com", lastContact:"2025-08-18", nextFollowUp:"", products:"Plata", notes:"Bartender: Emily.", activityLog:[{date:"2026-05-06",type:"Visit",note:"On-site to set up product back into their system. Discussing activation event. Bartender: Emily."}]},
+  {id:30, name:"Spirits2U", type:"Retail", city:"Palm Bay, FL", address:"3085 Jupiter Blvd, Ste 8 & 9, Palm Bay, FL 32909", contact:"Ravi", phone:"(256) 856-1796", email:"spirits2uliquor@gmail.com", lastContact:"2025-09-29", nextFollowUp:"", products:"", notes:"", activityLog:[]},
+  {id:31, name:"Shamrock Liquors", type:"Retail", city:"Orlando, FL", address:"11551 University Blvd, Suite #10, Orlando, FL 32817", contact:"Neil", phone:"", email:"shamrockliquors@gmail.com", lastContact:"2025-07-10", nextFollowUp:"", products:"", notes:"", activityLog:[]},
+  {id:32, name:"Secrets Hideaway Resort", type:"Hotel", city:"Kissimmee, FL", address:"2145 Irlo Bronson Memorial Hwy., Kissimmee, FL 34744", contact:"", phone:"", email:"", lastContact:"2025-07-08", nextFollowUp:"", products:"Anejo", notes:"", activityLog:[]},
+  {id:33, name:"Rachel's (North)", type:"Bar", city:"Casselberry, FL", address:"401 E Semoran Blvd, Casselberry, FL 32707", contact:"Cole (GM)", phone:"(407) 625-7946", email:"", lastContact:"2026-05-11", nextFollowUp:"", products:"Reposado", notes:"GM: Cole. Legal: Florida Beverage Corp DBA Rachel's. License: BEV6901081.", activityLog:[{date:"2026-05-11",type:"Order",note:"Order placed: 5 cases Reposado @ $214.44 (5-case tier) = $1,072.20. New contact: Cole (GM). License BEV6901081 confirmed."}]},
+  {id:34, name:"Moxy St. Pete", type:"Hotel", city:"St. Petersburg, FL", address:"1234 Central Ave., St. Petersburg, FL 33705", contact:"", phone:"", email:"", lastContact:"2025-08-01", nextFollowUp:"", products:"Plata, Reposado", notes:"", activityLog:[]},
+  {id:35, name:"Monkey Bar & Grille", type:"Bar", city:"Indialantic, FL", address:"2364-2368 N Highway A1A, Indialantic, FL 32903", contact:"", phone:"", email:"leo@rocketspiritsllc.com", lastContact:"2025-11-13", nextFollowUp:"", products:"Plata", notes:"", activityLog:[]},
+  {id:41, name:"REC 225", type:"Bar", city:"Cocoa, FL", address:"225 King St, Cocoa, FL 32922", contact:"", phone:"(321) 735-8091", email:"", lastContact:"", nextFollowUp:"", products:"Plata, Reposado", notes:"Games bar & restaurant in Cocoa Village. Indoor bocce, cornhole, pool, darts, shuffleboard. Mon-Thu 4PM-2AM, Fri-Sun 11AM-2AM. rec225cocoa.com. License # pending.", activityLog:[]},
+  {id:40, name:"Debauchery Bar", type:"Bar", city:"Melbourne, FL", address:"807 E New Haven Ave, Melbourne, FL 32901", contact:"Tony (Manager)", phone:"(321) 821-4914", email:"", lastContact:"", nextFollowUp:"", products:"Plata, Reposado", notes:"Downtown Melbourne live music venue. 37 draughts, 130+ beers. Open 7 days 2PM-2AM. License # pending confirmation. downtowndebauchery.com.", activityLog:[{date:"2026-05-08",type:"Order",note:"Order placed: 1 case Plata @ $224.94. Manager Tony confirmed."},{date:"2026-05-08",type:"Order",note:"Reorder placed: 1 case Plata @ $224.94."}]},
+  {id:39, name:"In and Out Liquors #1105", type:"Retail", city:"Cocoa, FL", address:"1105 Clearlake Rd, Cocoa, FL 32922", contact:"Lisa (Manager)", phone:"(321) 339-2354", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Manager: Lisa. Hours: Mon-Sun 9AM-10PM. Part of In and Out Liquors chain.", activityLog:[]},
+  {id:38, name:"In and Out Liquors (Cocoa)", type:"Retail", city:"Cocoa, FL", address:"2301 Clearlake Rd, Cocoa, FL 32926", contact:"Adam", phone:"", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Employee: Adam. Hours: Every day 9AM-11PM. Accepts Apple Pay & contactless payments.", activityLog:[]},
+  {id:37, name:"In and Out Liquors", type:"Retail", city:"Melbourne, FL", address:"1775 N Wickham Rd, Melbourne, FL 32935", contact:"Mitch (Owner) / Pina", phone:"(321) 259-8569", email:"", lastContact:"2026-05-12", nextFollowUp:"", products:"Plata, Reposado", notes:"Owner: Mitch. Employee: Pina. License: BEV1502323 (MA Harsiddhi LLC). Open Sun-Thu 7AM-12AM, Fri-Sat 7AM-2AM. Offers delivery. inandoutliquors.com", activityLog:[{date:"2026-05-25",type:"Order",note:"Order placed: 1 Plata + 1 Añejo + 1 Extra Añejo (3-case tier) = $1,049.82."},{date:"2026-05-12",type:"Order",note:"Order placed: 2 Plata + 3 Reposado (5-case tier) = $1,033.20. License BEV1502323 confirmed."}]},
+  {id:36, name:"Whiskey Row", type:"Bar", city:"Melbourne, FL", address:"7777 N Wickham Rd #18, Melbourne, FL 32940", contact:"Mike Switzer", phone:"", email:"", lastContact:"2025-04-16", nextFollowUp:"", products:"Plata", notes:"", activityLog:[]},
+  {id:42, name:"Total Wine #905 (Boca Raton)", type:"Retail", city:"Boca Raton, FL", address:"5050 Town Center Circle, Boca Raton, FL 33486", contact:"", phone:"(561) 391-1281", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:43, name:"Total Wine #906 (Boynton Beach)", type:"Retail", city:"Boynton Beach, FL", address:"850 North Congress Ave., Boynton Beach, FL 33426", contact:"", phone:"(561) 731-5411", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:44, name:"Total Wine #927 (Coral Springs)", type:"Retail", city:"Coral Springs, FL", address:"2564 N. University Drive, Coral Springs, FL 33065", contact:"", phone:"(954) 227-7993", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:45, name:"Total Wine #932 (Doral)", type:"Retail", city:"Doral, FL", address:"1635 NW 107th Ave., Doral, FL 33172", contact:"", phone:"(305) 704-7130", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:46, name:"Total Wine #921 (Melbourne)", type:"Retail", city:"Melbourne, FL", address:"2302 Harnett Drive, Melbourne, FL 32940", contact:"", phone:"(321) 637-9844", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:47, name:"Total Wine #918 (Miami (Kendall))", type:"Retail", city:"Miami (Kendall), FL", address:"8851 SW 136th Street, Miami (Kendall), FL 33176", contact:"", phone:"(305) 971-7615", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:48, name:"Total Wine #922 (Miami (Mills Dr))", type:"Retail", city:"Miami (Mills Dr), FL", address:"11960 Mills Dr., Miami (Mills Dr), FL 33183", contact:"", phone:"(305) 630-3790", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:49, name:"Total Wine #936 (Miami (Coconut Grove))", type:"Retail", city:"Miami (Coconut Grove), FL", address:"2750 SW 27th Terrace Suite 201, Miami (Coconut Grove), FL 33133", contact:"", phone:"(786) 772-0710", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:50, name:"Total Wine #931 (Miami (Aventura))", type:"Retail", city:"Miami (Aventura), FL", address:"19925 Biscayne Blvd., Miami (Aventura), FL 33180", contact:"", phone:"(786) 654-5488", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:51, name:"Total Wine #912 (North Miami)", type:"Retail", city:"North Miami, FL", address:"14750 Biscayne Boulevard, North Miami, FL 33181", contact:"", phone:"(305) 354-3270", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:52, name:"Total Wine #903 (Palm Beach Gardens)", type:"Retail", city:"Palm Beach Gardens, FL", address:"11221 Legacy Avenue, Palm Beach Gardens, FL 33410", contact:"", phone:"(561) 622-7340", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:53, name:"Total Wine #915 (Pembroke Pines)", type:"Retail", city:"Pembroke Pines, FL", address:"15980 Pines Blvd., Pembroke Pines, FL 33027", contact:"", phone:"(954) 437-5557", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:54, name:"Total Wine #919 (Plantation)", type:"Retail", city:"Plantation, FL", address:"801 S. University Dr. Suite G100, Plantation, FL 33324", contact:"", phone:"(954) 424-0954", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:55, name:"Total Wine #939 (Port St. Lucie)", type:"Retail", city:"Port St. Lucie, FL", address:"1725 NW St Lucie W Blvd, Port St. Lucie, FL 34986", contact:"", phone:"(772) 348-0300", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:56, name:"Total Wine #916 (Stuart)", type:"Retail", city:"Stuart, FL", address:"2550 NW Federal Highway, Stuart, FL 34994", contact:"", phone:"(772) 692-1530", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:57, name:"Total Wine #914 (University Park (Sarasota))", type:"Retail", city:"University Park (Sarasota), FL", address:"8539 Cooper Creek Blvd., University Park (Sarasota), FL 34201", contact:"", phone:"(941) 351-7895", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:58, name:"Total Wine #941 (Vero Beach)", type:"Retail", city:"Vero Beach, FL", address:"6150 20th Street, Vero Beach, FL 32966", contact:"", phone:"(772) 539-0500", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:59, name:"Total Wine #917 (Village of Wellington)", type:"Retail", city:"Village of Wellington, FL", address:"960 S State Road 7, Village of Wellington, FL 33414", contact:"", phone:"(561) 795-9229", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:60, name:"Total Wine #942 (Delray Beach)", type:"Retail", city:"Delray Beach, FL", address:"Delray Beach, FL", contact:"", phone:"", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
+  {id:61, name:"Total Wine #945 (North Jacksonville)", type:"Retail", city:"North Jacksonville, FL", address:"North Jacksonville, FL", contact:"", phone:"", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]}
+];
+ 
+const today = new Date().toISOString().split("T")[0];
+ 
+const LEADS_INIT = [
+  {id:"L01",name:"Timbr",type:"Bar",city:"Fort Lauderdale, FL",address:"15 W Las Olas Blvd",contact:"Peter",phone:"786-897-2280",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L02",name:"Island Liquor",type:"Retail",city:"Daytona Beach, FL",address:"425 N Atlantic Ave",contact:"Dan",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L03",name:"Pineapples",type:"Bar",city:"Melbourne, FL",address:"1434 Pineapple Ave",contact:"Brian/Keith/Manny",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L04",name:"Wharf Fort Lauderdale",type:"Bar",city:"Fort Lauderdale, FL",address:"20 W Las Olas Blvd",contact:"Aneal",phone:"954-993-7098",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L05",name:"The Mansion",type:"Bar",city:"",address:"",contact:"Danny",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L06",name:"Bunky\'s Bar & Grill",type:"Bar",city:"",address:"",contact:"Allison/Amy",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L07",name:"Dijons Village Market",type:"Bar",city:"",address:"",contact:"Adam",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L08",name:"Squid Lips",type:"Bar",city:"Melbourne, FL",address:"1477 Pineapple Ave",contact:"Chris",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L09",name:"Seed To Table",type:"Restaurant",city:"Naples, FL",address:"4835 Immokalee Road",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L10",name:"Sugar Shack Downtown",type:"Bar",city:"Bonita Springs, FL",address:"27421 Old 41 Road",contact:"Gary/Craig",phone:"239-301-4321",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L11",name:"Primo Liquors",type:"Retail",city:"Fort Lauderdale, FL",address:"700 S Federal Hwy",contact:"CJ",phone:"754-242-2969",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L12",name:"Aces Club",type:"Bar",city:"Cocoa Beach, FL",address:"74 N Orlando Ave",contact:"Colin",phone:"407-803-3359",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L13",name:"Meg O\'Malleys",type:"Bar",city:"Melbourne, FL",address:"812 E New Haven Ave",contact:"Christine",phone:"321-952-5510",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L14",name:"Lourdes Library",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L15",name:"Urban Prime",type:"Bar",city:"Melbourne, FL",address:"2435 Metfield Dr",contact:"Gina",phone:"321-499-1188",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L16",name:"28 North Gastro Pub",type:"Bar",city:"Melbourne, FL",address:"2250 Town Center Ave",contact:"Joe Snyder",phone:"321-365-0173",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L17",name:"Main Street Pub",type:"Bar",city:"",address:"",contact:"Matt (manager) / Lena (Owner)",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L18",name:"Lou\'s Blues",type:"Bar",city:"",address:"",contact:"Jessika",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L19",name:"Debauchery",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L20",name:"Aquarina Golf Course",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L21",name:"Side Pocket",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L22",name:"Slingers",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L23",name:"Ichabods",type:"Bar",city:"",address:"",contact:"Stacey",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L24",name:"Cabana Shores",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L25",name:"Agave de Oro",type:"Restaurant",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L26",name:"BB\'s Beach Bar",type:"Bar",city:"",address:"",contact:"Barry",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L27",name:"Grills",type:"Bar",city:"",address:"",contact:"Jason",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L28",name:"River Rocks",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L29",name:"Time Out Bar",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L30",name:"Foo Bar",type:"Bar",city:"",address:"",contact:"Bear",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L31",name:"Ryan\'s Pizza",type:"Restaurant",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L32",name:"River Deck",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L33",name:"Captain Hiram\'s",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L34",name:"BP To Go Gas Station",type:"Retail",city:"Cocoa, FL",address:"4301 SR 524",contact:"Marie",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L35",name:"Florida Wine & Spirits",type:"Retail",city:"Rockledge, FL",address:"3695 Murrell Road",contact:"Christine",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L36",name:"Hula Moon",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L37",name:"Fiesta Jalisco",type:"Restaurant",city:"",address:"",contact:"Johnathan (server) / Francisco (owner)",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L38",name:"Cazadores Mexican Grill",type:"Restaurant",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L39",name:"Charlie & Jake\'s",type:"Bar",city:"",address:"",contact:"Amy",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L40",name:"The Executive Cigar Bar",type:"Bar",city:"",address:"",contact:"Matthew (Bartender) / Lonnie (Front) / Eric",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L41",name:"Masa",type:"Restaurant",city:"",address:"",contact:"Ryan",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L42",name:"Seaside Florida Grill",type:"Restaurant",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L43",name:"Liquor Land",type:"Retail",city:"",address:"",contact:"Dee (father)",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L44",name:"Frigates",type:"Bar",city:"",address:"",contact:"Christina",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L45",name:"Crush Xi",type:"Bar",city:"",address:"",contact:"Stu (Bar manager) / Steve (Owner)",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L46",name:"Ember and Oak",type:"Bar",city:"",address:"",contact:"Gabriel",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L47",name:"Fiesta Bar and Grill",type:"Restaurant",city:"",address:"",contact:"Madonna (manager) / Molly (bartender)",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L48",name:"El Mojito",type:"Restaurant",city:"",address:"",contact:"Cecil",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L49",name:"Dos Amigos",type:"Restaurant",city:"",address:"",contact:"Justin (manager) / Katie (manager/bar)",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L50",name:"Double Tapp Grill",type:"Bar",city:"",address:"",contact:"Bri (asst manager)",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L51",name:"Makotos",type:"Restaurant",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L52",name:"Hydro Smoke and Vape",type:"Retail",city:"",address:"",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L53",name:"Smoke & Vape Gallery",type:"Retail",city:"",address:"3128 Lake Washington",contact:"",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L54",name:"American Liquors",type:"Retail",city:"",address:"3188 Lake Washington",contact:"Andy",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L55",name:"Gators Dockside",type:"Bar",city:"",address:"",contact:"Gabe",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
+  {id:"L56",name:"Bowlero Melbourne",type:"Bar",city:"Melbourne, FL",address:"1099 N Wickham Rd, Melbourne, FL 32935",contact:"Greg (Asst Manager) / Eric (GM)",phone:"(321) 242-2695",email:"",source:"In person",notes:"Bowling alley with full bar. Part of Lucky Strike Entertainment — hundreds of venues nationwide. Corporate chain = potential to expand Dios Azul across all locations if relationship is established. Asst Manager: Greg. GM: Eric.",createdAt:"2026-04-06",activityLog:[]},
+  {id:"L57",name:"Ford's Garage Viera",type:"Restaurant",city:"Viera, FL",address:"5480 Lake Andrew Dr, Melbourne, FL 32940",contact:"Samantha",phone:"(321) 405-3673",email:"",source:"Google Maps",notes:"High-volume American bar & grill with strong automotive theme. ⭐ 4.7 with 3,000+ reviews. Part of the Ford's Garage chain. Full bar program — great fit for Dios Azul tequila cocktails. Open daily 11AM, Fri/Sat until 11PM.",createdAt:"2026-04-06",activityLog:[]},
+  {id:"L58",name:"Crowne Plaza Melbourne Oceanfront",type:"Hotel",city:"Melbourne, FL",address:"2605 N Highway A1A, Melbourne, FL 32903",contact:"Jacob / Martin Carlswaerd Forsberg (Sr. Food & Beverage Manager — Decision Maker)",phone:"(321) 777-4100",email:"mcarlswaerdforsberg@cpmelbourne.com",source:"In person",notes:"IHG property. Martin Carlswaerd Forsberg is Sr. Food & Beverage Manager — key decision maker. Mobile: 321-775-0024. Website: cpmelbourne.com. Part of IHG One Rewards portfolio.",createdAt:"2026-04-09",activityLog:[{date:"2026-05-06",type:"Visit",note:"Met to discuss activation, promo events, and product placement. Awaiting decision from Martin."}]},
+    {id:"L59",name:"Vintage Liquor Brickell",type:"Retail",city:"Miami, FL",address:"300 SW 18th Terr, Miami, FL 33129",contact:"Anthony (Owner)",phone:"(786) 877-0383",email:"",source:"Prime Spirits (Matt)",notes:"Owner: Anthony. Referral from distributor Matt at Prime Spirits. vintageliquor.com · Sun 10:30AM-7PM | Mon-Wed 9:30AM-9:30PM | Thu 9:30AM-10:30PM | Fri-Sat 9:30AM-11PM.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L60",name:"Gulf Liquors",type:"Retail",city:"Miami Beach, FL",address:"1681 Alton Rd, Miami Beach, FL 33139",contact:"Nick (Manager)",phone:"(305) 531-5551",email:"",source:"Prime Spirits (Matt)",notes:"Manager: Nick — brother of Anthony (owner of Vintage Liquor Brickell). Father's name is Francis. Referral from distributor Matt at Prime Spirits. gulfliquorsmiami.com · Sun 10AM-9PM | Mon-Wed 10AM-10PM | Thu-Sat 10AM-12AM. VISITED 4/13/26 — Not at this time, keep following up. Best day to visit: TUESDAY.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L61",name:"1010 Fine Wine & Spirits",type:"Retail",city:"Miami, FL",address:"1010 SW Second Ave, Miami, FL 33130",contact:"",phone:"(786) 574-4982",email:"",source:"Prime Spirits (Matt)",notes:"Opening Soon status. Sun-Tue 11AM-10PM | Wed-Sat 11AM-11PM. Delivery, wheelchair accessible, accepts credit cards.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L62",name:"Primo Fine Wine & Spirits",type:"Retail",city:"Miami Beach, FL",address:"2236 Collins Ave, Miami Beach, FL 33139",contact:"Gus (Store Manager) / Nash (Employee)",phone:"(305) 674-8117",email:"",source:"Prime Spirits (Matt)",notes:"Every day 10AM-12AM. primofinewineandspirits.com. Delivery, wheelchair accessible. Store Manager: Gus. Follow up in a few weeks.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L63",name:"Tuto & Sons Liquors",type:"Retail",city:"Miami Beach, FL",address:"211 11th St, Miami Beach, FL 33139",contact:"",phone:"(305) 531-8150",email:"",source:"Prime Spirits (Matt)",notes:"Every day 10AM-8PM. Accepts Apple Pay, contactless, Wi-Fi.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L64",name:"Miami Beach Liquors (MB Liquors)",type:"Retail",city:"Miami Beach, FL",address:"909 Alton Rd, Miami Beach, FL 33139",contact:"Phil (Owner)",phone:"(305) 532-8300",email:"",source:"Prime Spirits (Matt)",notes:"Owner: Phil. Every day 10AM-10PM. mbliquors.com.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L65",name:"Ruben's Liquors",type:"Retail",city:"Miami Beach, FL",address:"1000 71st St, Miami Beach, FL 33141",contact:"",phone:"(305) 866-5976",email:"",source:"Prime Spirits (Matt)",notes:"Every day 10AM-11PM. rubensliquorsmiami.com. Alcoholic beverage service, ATM on site.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L66",name:"4S Liquors",type:"Retail",city:"Boca Raton, FL",address:"1501 NW Boca Raton Blvd, Boca Raton, FL 33432",contact:"",phone:"(561) 367-3461",email:"",source:"Prime Spirits (Matt)",notes:"Sun 12PM-9PM | Mon-Sat 10AM-11PM. 4sliquors.com. Delivery, Apple Pay, contactless.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L67",name:"Kemistry Nightclub",type:"Bar",city:"Fort Lauderdale, FL",address:"307 SW 2nd St, Fort Lauderdale, FL 33312",contact:"Cesar (Brand Ambassador - Addison)",phone:"(954) 297-9255",email:"",source:"Brand Ambassador",notes:"Meeting with brand ambassador Addison (contact: Cesar). Thu 9PM-4AM | Fri-Sat 10PM-4AM. Nightclub — strong cocktail program opportunity. BEV License: BEV1600057.",createdAt:"2026-04-13",activityLog:[]},
+  {id:"L70",name:"Element Melbourne Oceanfront",type:"Hotel",city:"Melbourne, FL",address:"2655 N Hwy A1A, Melbourne, FL 32903",contact:"Ruthie deBlanc (Beverage & Food Manager)",phone:"(321) 775-0075",email:"rdeblanc@elementmelbourneoceanfront.com",source:"Field",notes:"Element by Westin. F&B Manager: Ruthie deBlanc. Decision-maker for beverage program. elementhotels.com.",createdAt:"2026-05-06",activityLog:[]},
+  {id:"L71",name:"1007 Liquor",type:"Retail",city:"Orlando, FL",address:"Orlando, FL",contact:"Randy (Store Manager)",phone:"",email:"",source:"Field",notes:"Manager: Randy. Best to visit early afternoons. Accepts Apple Pay & contactless.",createdAt:"2026-05-08",activityLog:[]},
+  {id:"L68",name:"Summerland Wines & Spirits",type:"Retail",city:"Summerland Key, FL",address:"24814 Overseas Hwy, Summerland Key, FL 33042",contact:"",phone:"(305) 745-3900",email:"",source:"Google Maps",notes:"Highly rated liquor store in the Keys. ⭐ 4.7. Good selection, knowledgeable staff, fair prices. Wine tasting events. Open 9AM-8PM daily.",createdAt:"2026-04-03",activityLog:[]},
+  {id:"L72",name:"Total Wine #925 (Altamonte Springs)",type:"Retail",city:"Altamonte Springs, FL",address:"160 E Altamonte DR, Altamonte Springs, FL 32701",contact:"",phone:"(407) 263-0540",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L73",name:"Total Wine #928 (Brandon)",type:"Retail",city:"Brandon, FL",address:"11211 Causeway Blvd, Brandon, FL 33511",contact:"",phone:"(813) 657-9001",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L74",name:"Total Wine #910 (Clearwater)",type:"Retail",city:"Clearwater, FL",address:"2528 State Road 580, Clearwater, FL 33761",contact:"",phone:"(727) 431-1010",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L75",name:"Total Wine #923 (Daytona Beach)",type:"Retail",city:"Daytona Beach, FL",address:"2500 W International Speedway Blvd, Daytona Beach, FL 32114",contact:"",phone:"(386) 947-9310",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L76",name:"Total Wine #930 (Estero)",type:"Retail",city:"Estero, FL",address:"8012 Mediterranean Drive Suite 101, Estero, FL 33928",contact:"",phone:"(239) 498-6211",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L77",name:"Total Wine #904 (Fort Lauderdale)",type:"Retail",city:"Fort Lauderdale, FL",address:"1906 Cordova Road, Fort Lauderdale, FL 33316",contact:"",phone:"(954) 828-9463",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L78",name:"Total Wine #940 (Fort Lauderdale)",type:"Retail",city:"Fort Lauderdale, FL",address:"1740 N Federal Highway, Fort Lauderdale, FL 33305",contact:"",phone:"(954) 526-9333",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L79",name:"Total Wine #902 (Fort Myers)",type:"Retail",city:"Fort Myers, FL",address:"13711 S. Tamiami Trail, Fort Myers, FL 33912",contact:"",phone:"(239) 432-0510",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L80",name:"Total Wine #929 (Gainesville)",type:"Retail",city:"Gainesville, FL",address:"3965 Plaza Blvd Suite 10, Gainesville, FL 32608",contact:"",phone:"(352) 378-1948",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L81",name:"Total Wine #907 (Jacksonville)",type:"Retail",city:"Jacksonville, FL",address:"4413 Town Center Parkway 300, Jacksonville, FL 32246",contact:"",phone:"(904) 998-1740",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L82",name:"Total Wine #933 (Lady Lake)",type:"Retail",city:"Lady Lake, FL",address:"641 N. Highway 27-441, Lady Lake, FL 32159",contact:"",phone:"(352) 350-5979",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L83",name:"Total Wine #934 (Lutz)",type:"Retail",city:"Lutz, FL",address:"25535 Sierra Center Blvd., Lutz, FL 33559",contact:"",phone:"(813) 435-1027",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L84",name:"Total Wine #926 (Miami Beach)",type:"Retail",city:"Miami Beach, FL",address:"1139 5th St, Miami Beach, FL 33139",contact:"",phone:"(786) 276-6545",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L85",name:"Total Wine #908 (Naples)",type:"Retail",city:"Naples, FL",address:"6424 Naples Blvd., Suite 601, Naples, FL 34109",contact:"",phone:"(239) 649-4979",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L86",name:"Total Wine #920 (Orlando (Millenia))",type:"Retail",city:"Orlando (Millenia), FL",address:"4625 Millenia Plaza Way, Orlando (Millenia), FL 32839",contact:"",phone:"(407) 352-6330",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L87",name:"Total Wine #909 (Orlando (Colonial))",type:"Retail",city:"Orlando (Colonial), FL",address:"2712 East Colonial Drive, Orlando (Colonial), FL 32803",contact:"",phone:"(407) 894-6553",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L88",name:"Total Wine #937 (Pensacola)",type:"Retail",city:"Pensacola, FL",address:"1660 Airport Blvd., Unit 145, Pensacola, FL 32504",contact:"",phone:"(850) 898-9946",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L89",name:"Total Wine #935 (Port Charlotte)",type:"Retail",city:"Port Charlotte, FL",address:"19400 Cochran Blvd Suite 160, Port Charlotte, FL 33948",contact:"",phone:"(941) 585-0628",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L90",name:"Total Wine #924 (Sarasota)",type:"Retail",city:"Sarasota, FL",address:"8280 S Tamiami Trail, Sarasota, FL 34238",contact:"",phone:"(941) 918-8075",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L91",name:"Total Wine #913 (St Petersburg)",type:"Retail",city:"St Petersburg, FL",address:"4880 Park St N, St Petersburg, FL 33709",contact:"",phone:"(727) 544-6018",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L92",name:"Total Wine #938 (Tallahassee)",type:"Retail",city:"Tallahassee, FL",address:"1400-31 Village Square Blvd, Tallahassee, FL 32312",contact:"",phone:"(850) 270-2064",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L93",name:"Total Wine #901 (Tampa)",type:"Retail",city:"Tampa, FL",address:"1720 North Dale Mabry Highway, Tampa, FL 33607",contact:"",phone:"(813) 350-9601",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L94",name:"Total Wine #944 (Lake Nona)",type:"Retail",city:"Lake Nona, FL",address:"Lake Nona, FL",contact:"",phone:"",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L95",name:"Total Wine #943 (Destin)",type:"Retail",city:"Destin, FL",address:"Destin, FL",contact:"",phone:"",email:"",source:"Total Wine chain expansion",notes:"Total Wine & More retail chain location. Not yet carrying Dios Azul — target for placement.",createdAt:"2026-05-22",activityLog:[]},
+  {id:"L96",name:"In and Out Liquors (Us-1 & Aurora Melbourne)",type:"Retail",city:"Melbourne, FL",address:"1734 North Harbor City Blvd, Melbourne, FL 32935",contact:"",phone:"(321) 259-5554",email:"",source:"In and Out Liquors chain",notes:"Open until 11PM. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L97",name:"In and Out Liquors (Sarno Road Melbourne)",type:"Retail",city:"Melbourne, FL",address:"2768 Sarno Road, Melbourne, FL 32935",contact:"",phone:"(321) 220-1250",email:"",source:"In and Out Liquors chain",notes:"Upcoming store — not yet open. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L98",name:"In and Out Liquors (Dixon & Clearlake Cocoa)",type:"Retail",city:"Cocoa, FL",address:"685 Clearlake Road, Cocoa, FL 32922",contact:"",phone:"(321) 252-2065",email:"",source:"In and Out Liquors chain",notes:"Open until 2AM. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L99",name:"In and Out Liquors (Publix Plaza Cocoa)",type:"Retail",city:"Cocoa, FL",address:"2301 Florida 524, Cocoa, FL 32926",contact:"",phone:"(321) 252-2364",email:"",source:"In and Out Liquors chain",notes:"Open until 11:30PM. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L100",name:"In and Out Liquors (Garden & Park Titusville)",type:"Retail",city:"Titusville, FL",address:"1420 Garden Street, Titusville, FL 32796",contact:"",phone:"(321) 252-2142",email:"",source:"In and Out Liquors chain",notes:"Open until 12AM. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L101",name:"In and Out Liquors (S. Hopkins Titusville)",type:"Retail",city:"Titusville, FL",address:"3542 South Hopkins Avenue, Titusville, FL 32780",contact:"",phone:"(321) 252-2390",email:"",source:"In and Out Liquors chain",notes:"Open until 12AM. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L102",name:"In and Out Liquors (Publix Plaza Garden St Titusville)",type:"Retail",city:"Titusville, FL",address:"3261 Garden Street, Titusville, FL 32796",contact:"",phone:"(321) 252-2390",email:"",source:"In and Out Liquors chain",notes:"Upcoming store — not yet open. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L103",name:"In and Out Liquors (S. Courtenay Pk Merritt Island)",type:"Retail",city:"Merritt Island, FL",address:"860 North Courtenay Parkway, Merritt Island, FL 32953",contact:"",phone:"(321) 635-5999",email:"",source:"In and Out Liquors chain",notes:"Open until late. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L104",name:"In and Out Liquors (S Patrick Banana IHB)",type:"Retail",city:"Satellite Beach, FL",address:"1899 South Patrick Drive, Satellite Beach, FL 32937",contact:"",phone:"(321) 259-8569",email:"",source:"In and Out Liquors chain",notes:"Upcoming store — not yet open. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L105",name:"In and Out Liquors (S Patrick Sherwater Satellite Bch)",type:"Retail",city:"Satellite Beach, FL",address:"690 South Patrick Drive, Satellite Beach, FL 32937",contact:"",phone:"(321) 259-8569",email:"",source:"In and Out Liquors chain",notes:"Upcoming store — not yet open. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L106",name:"In and Out Liquors (Gatlin Port St Lucie)",type:"Retail",city:"Port St. Lucie, FL",address:"1234 Southwest Gatlin Blvd, Port St. Lucie, FL 34953",contact:"",phone:"(772) 777-1350",email:"",source:"In and Out Liquors chain",notes:"Open until 10PM. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L107",name:"In and Out Liquors (Crosstown Port St Lucie)",type:"Retail",city:"Port St. Lucie, FL",address:"10680 Crosstown Parkway, Port St. Lucie, FL 34987",contact:"",phone:"(772) 777-1229",email:"",source:"In and Out Liquors chain",notes:"Open until 10PM. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L108",name:"In and Out Liquors (Ocean Drive Jensen Beach)",type:"Retail",city:"Jensen Beach, FL",address:"11027 South Ocean Drive, Jensen Beach, FL 34957",contact:"",phone:"(772) 249-8756",email:"",source:"In and Out Liquors chain",notes:"Open until 8:30PM. Delivery & in-store pickup. Part of In and Out Liquors chain.",createdAt:"2026-05-24",activityLog:[]},
+  {id:"L109",name:"The Dunes Cocoa Beach",type:"Bar",city:"Cocoa Beach, FL",address:"34 S Atlantic Ave, Cocoa Beach, FL 32931",contact:"",phone:"(321) 613-4141",email:"",source:"Field",notes:"Bar with happy hour. Open Sun 2PM-10PM, Tue-Thu 2PM-12AM, Fri-Sat 2PM-2AM, closed Mon. Website: thedunescb.com",createdAt:"2026-05-26",activityLog:[]},
+  {id:"L110",name:"The Tiny Turtle",type:"Restaurant",city:"Cocoa Beach, FL",address:"249 Minutemen Causeway, Cocoa Beach, FL 32931",contact:"",phone:"(321) 446-7361",email:"",source:"Field",notes:"Caribbean Cuisine restaurant. ⭐ 4.6 (1,900 reviews). Open daily 9AM-9PM, Sun 9AM-3PM. Casual fusion spot, outdoor patio.",createdAt:"2026-05-26",activityLog:[]},
+  {id:"L111",name:"Jazzy's Mainely Lobster & Seafood Restaurant",type:"Restaurant",city:"Cocoa Beach, FL",address:"210 N Orlando Ave, Cocoa Beach, FL 32931",contact:"",phone:"(321) 613-3993",email:"",source:"Field",notes:"Seafood restaurant. ⭐ 4.5 (4,000+ reviews). Open daily 11AM-10PM. Maine-style lobster, full bar with cocktails. Key staff: Matthew, David, Tina (bartenders).",createdAt:"2026-05-26",activityLog:[]}
+];
+ 
+const INVOICES_INIT = [
+  {id:1, account:"County Line Bar & Grill", territory:"Melbourne / Brevard",   date:"2026-04-09", products:"Plata, Reposado",            cases:10, amount:"$1,889.40", notes:"10-case tier. 5 Plata @ $179.94 + 5 Reposado @ $197.94. Owner: Hunter. Check on delivery. After 5PM. License: BEV1502333."},
+  {id:2, account:"Social Distance",         territory:"Melbourne / Brevard",   date:"2026-04-09", products:"Plata, Reposado, Extra Añejo",cases:3,  amount:"$986.82", notes:"3-case tier. 1 Plata @ $209.94 + 1 Reposado @ $230.94 + 1 Extra Añejo @ $545.94. Ask for Shawn or Jimmy. Check on delivery. License: BEV1501974."},
+  {id:3, account:"Kemistry Nightclub",      territory:"Fort Lauderdale",       date:"2026-04-23", products:"Plata, Reposado",            cases:5,  amount:"$1,013.70", notes:"5-case tier. 3 Plata @ $194.94 + 2 Reposado @ $214.44. Contact: Cesar (Brand Ambassador). License: BEV1600057."},
+  {id:4, account:"Debauchery Bar",          territory:"Melbourne / Brevard",   date:"2026-04-29", products:"Plata, Reposado",            cases:2,  amount:"$472.38",   notes:"1-case tier. 1 Plata @ $224.94 + 1 Reposado @ $247.44. Owner: Clinton Davis. License: pending."},
+  {id:5, account:"REC 225",                 territory:"Cocoa Village / Brevard",date:"2026-04-29", products:"Plata, Reposado",           cases:2,  amount:"$472.38",   notes:"1-case tier. 1 Plata @ $224.94 + 1 Reposado @ $247.44. Cocoa Village. License: pending."},
+  {id:6, account:"Florida Cork & Bottle", territory:"Melbourne / Brevard", date:"2026-05-06", products:"Plata, Añejo, Extra Añejo", cases:3, amount:"$1,049.82", notes:"3-case tier. 1 Plata @ $209.94 + 1 Añejo @ $293.94 + 1 Extra Añejo @ $545.94. Owner: Russ (321) 508-3559. Ramon (Cashier). License: BEV1500102. Sales Tax: 15-8018580753-3."},
+  {id:8, account:"Debauchery Bar", territory:"Melbourne / Brevard", date:"2026-05-08", products:"Plata", cases:1, amount:"$224.94", notes:"1-case tier. 1 Plata @ $224.94. Manager: Tony. License pending."},
+  {id:9, account:"Rachel's (North)", territory:"Orlando / Central FL", date:"2026-05-11", products:"Reposado", cases:5, amount:"$1,072.20", notes:"5-case tier. 5 Reposado @ $214.44. GM: Cole. License: BEV6901081."},
+  {id:10, account:"In and Out Liquors #1775", territory:"Melbourne / Brevard", date:"2026-05-12", products:"Plata, Reposado", cases:5, amount:"$1,033.20", notes:"5-case tier. 2 Plata @ $194.94 + 3 Reposado @ $214.44. Owner: Mitch. License: BEV1502323."},
+  {id:11, account:"In and Out Liquors #1775", territory:"Melbourne / Brevard", date:"2026-05-25", products:"Plata, Reposado, Añejo", cases:6, amount:"$1,286.64", notes:"5-case tier. 3 Plata @ $194.94 + 2 Reposado @ $214.44 + 1 Añejo @ $272.94. Owner: Mitch. License: BEV1502323."},
+  {id:12, account:"Jimmy Hulas @ Pineda Crossing", territory:"Melbourne / Brevard", date:"2026-05-27", products:"Extra Añejo", cases:1, amount:"$584.94", notes:"1-case tier. 1 Extra Añejo @ $584.94. Contact: Kat (GM) or Zack (Bar Manager). License: BEV1507874."}
+];
+ 
+const emptyAccount = {id:null,name:"",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",lastContact:"",nextFollowUp:"",products:"",notes:"",activityLog:[]};
+const emptyLead = {id:null,name:"",type:"Bar",city:"",address:"",contact:"",phone:"",email:"",source:"",notes:"",activityLog:[]};
+const emptyInvoice = {id:null,account:"",territory:"",date:"",products:"",cases:"",amount:"",notes:""};
+ 
+function DiosAzulCRM() {
+  const [accounts, setAccounts] = useState(() => { try { const s = localStorage.getItem("da_accounts"); return s ? JSON.parse(s) : ACCOUNTS_INIT; } catch { return ACCOUNTS_INIT; } });
+  const [leads, setLeads] = useState(() => { try { const s = localStorage.getItem("da_leads"); return s ? JSON.parse(s) : LEADS_INIT; } catch { return LEADS_INIT; } });
+  const [invoices, setInvoices] = useState(() => { try { const s = localStorage.getItem("da_invoices"); return s ? JSON.parse(s) : INVOICES_INIT; } catch { return INVOICES_INIT; } });
+  const [tab, setTab] = useState("accounts");
+  const [view, setView] = useState("list");
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("All");
+  const [form, setForm] = useState(emptyAccount);
+  const [lform, setLform] = useState(emptyLead);
+  const [iform, setIform] = useState(emptyInvoice);
+  const [invSearch, setInvSearch] = useState("");
+  const [reportMonth, setReportMonth] = useState("all");
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [saveToast, setSaveToast] = useState(false);
+  const [syncUrl, setSyncUrl] = useState(() => { try { return localStorage.getItem("da_sync_url") || ""; } catch { return ""; } });
+  const [syncStatus, setSyncStatus] = useState("");
+  const [autoSync, setAutoSync] = useState(() => { try { return localStorage.getItem("da_auto_sync") === "1"; } catch { return false; } });
+  const [showSettings, setShowSettings] = useState(false);
+  const toastTimer = useRef(null);
+  const pushTimer = useRef(null);
+ 
+  useEffect(() => { try { localStorage.setItem("da_accounts", JSON.stringify(accounts)); } catch {} }, [accounts]);
+  useEffect(() => { try { localStorage.setItem("da_leads", JSON.stringify(leads)); } catch {} }, [leads]);
+  useEffect(() => { try { localStorage.setItem("da_invoices", JSON.stringify(invoices)); } catch {} }, [invoices]);
+ 
+  const persist = (key, setter, data) => {
+    setter(data);
+    try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setSaveToast(true);
+    toastTimer.current = setTimeout(() => setSaveToast(false), 1500);
+  };
+ 
+  // ---- Cloud sync (real fetch — works on GitHub Pages) ----
+  const saveSyncUrl = (url) => { setSyncUrl(url); try { localStorage.setItem("da_sync_url", url); } catch {} };
+  const cloudPush = async (silent) => {
+    if (!syncUrl) { if (!silent) setSyncStatus("Set sync URL in Settings first"); return; }
+    if (!silent) setSyncStatus("Pushing to cloud...");
+    try {
+      await fetch(syncUrl, { method:"POST", body: JSON.stringify({ accounts, leads, invoices }), headers:{"Content-Type":"text/plain;charset=utf-8"} });
+      if (!silent) { setSyncStatus("Pushed at " + new Date().toLocaleTimeString()); setTimeout(()=>setSyncStatus(""), 3000); }
+    } catch (err) { if (!silent) setSyncStatus("Push failed: " + err.message); }
+  };
+  const cloudPull = async () => {
+    if (!syncUrl) { setSyncStatus("Set sync URL in Settings first"); return; }
+    setSyncStatus("Pulling from cloud...");
+    try {
+      const res = await fetch(syncUrl + "?type=all&_=" + Date.now());
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      if (data.accounts) { setAccounts(data.accounts); localStorage.setItem("da_accounts", JSON.stringify(data.accounts)); }
+      if (data.leads) { setLeads(data.leads); localStorage.setItem("da_leads", JSON.stringify(data.leads)); }
+      if (data.invoices) { setInvoices(data.invoices); localStorage.setItem("da_invoices", JSON.stringify(data.invoices)); }
+      setSyncStatus("Pulled at " + new Date().toLocaleTimeString()); setTimeout(()=>setSyncStatus(""), 3000);
+    } catch (err) { setSyncStatus("Pull failed: " + err.message); }
+  };
+  useEffect(() => {
+    if (!autoSync || !syncUrl) return;
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => cloudPush(true), 2000);
+    return () => { if (pushTimer.current) clearTimeout(pushTimer.current); };
+  }, [accounts, leads, invoices, autoSync, syncUrl]);
+  const toggleAutoSync = () => { const n = !autoSync; setAutoSync(n); try { localStorage.setItem("da_auto_sync", n?"1":"0"); } catch {} };
+  // Auto-pull once on load if sync configured
+  useEffect(() => { if (syncUrl) cloudPull(); /* eslint-disable-next-line */ }, []);
+ 
+  const switchTab = t => { setTab(t); setView("list"); setSearch(""); setFilterType("All"); setInvSearch(""); setSelectMode(false); setSelectedIds(new Set()); };
+  const fmt = n => "$" + (Number(n)||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  const parseAmt = a => parseFloat(String(a==null?"0":a).replace(/[^0-9.]/g,""))||0;
+  const toggleSelect = (id) => setSelectedIds(prev => { const n = new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
+  const clearSelection = () => { setSelectedIds(new Set()); setSelectMode(false); };
+  const bulkDelete = () => {
+    if (!window.confirm("Delete " + selectedIds.size + " " + tab + "?")) return;
+    if (tab==="accounts") persist("da_accounts", setAccounts, accounts.filter(a=>!selectedIds.has(a.id)));
+    else if (tab==="leads") persist("da_leads", setLeads, leads.filter(l=>!selectedIds.has(l.id)));
+    else if (tab==="invoices") persist("da_invoices", setInvoices, invoices.filter(i=>!selectedIds.has(i.id)));
+    clearSelection();
+  };
+  const bulkConvertLeadsToAccounts = () => {
+    const conv = leads.filter(l=>selectedIds.has(l.id));
+    const na = conv.map(l=>({...emptyAccount, id:Date.now()+Math.random(), name:l.name, type:l.type, city:l.city, address:l.address, contact:l.contact, phone:l.phone, email:l.email, notes:l.notes, activityLog:l.activityLog||[]}));
+    persist("da_accounts", setAccounts, [...accounts, ...na]);
+    persist("da_leads", setLeads, leads.filter(l=>!selectedIds.has(l.id)));
+    clearSelection();
+  };
+  const bulkConvertAccountsToLeads = () => {
+    const conv = accounts.filter(a=>selectedIds.has(a.id));
+    const nl = conv.map(a=>({...emptyLead, id:"L"+Date.now()+Math.floor(Math.random()*1000), name:a.name, type:a.type, city:a.city, address:a.address, contact:a.contact, phone:a.phone, email:a.email, notes:a.notes, createdAt:today, activityLog:a.activityLog||[]}));
+    persist("da_leads", setLeads, [...leads, ...nl]);
+    persist("da_accounts", setAccounts, accounts.filter(a=>!selectedIds.has(a.id)));
+    clearSelection();
+  };
+ 
+  const types = ["All","Bar","Restaurant","Hotel","Retail","Total Wine"];
+  const matchType = (item) => filterType==="All" ? true : filterType==="Total Wine" ? item.name.toLowerCase().includes("total wine") : item.type===filterType;
+  const filteredAccounts = accounts.filter(a => { const q=search.toLowerCase(); return (!q || a.name.toLowerCase().includes(q) || (a.city||"").toLowerCase().includes(q) || (a.contact||"").toLowerCase().includes(q)) && matchType(a); });
+  const filteredLeads = leads.filter(l => { const q=search.toLowerCase(); return (!q || l.name.toLowerCase().includes(q) || (l.city||"").toLowerCase().includes(q) || (l.contact||"").toLowerCase().includes(q) || (l.source||"").toLowerCase().includes(q)) && matchType(l); });
+  const filteredInvoices = invoices.filter(i => { const q=invSearch.toLowerCase(); return !q || i.account.toLowerCase().includes(q) || (i.territory||"").toLowerCase().includes(q) || (i.products||"").toLowerCase().includes(q); });
+ 
+  const totalRev = invoices.reduce((s,i)=>s+parseAmt(i.amount),0);
+  const totalCases = invoices.reduce((s,i)=>s+(Number(i.cases)||0),0);
+  const monthlyMap = {}, terrMap = {}, acctMap = {};
+  invoices.forEach(inv => {
+    const parts = (inv.date||"").split("-"); if (parts[0]&&parts[1]) { const k=parts[0]+"-"+parts[1]; if(!monthlyMap[k])monthlyMap[k]={revenue:0,orders:0,cases:0}; monthlyMap[k].revenue+=parseAmt(inv.amount); monthlyMap[k].orders++; monthlyMap[k].cases+=Number(inv.cases)||0; }
+    const t=inv.territory||"Unknown"; if(!terrMap[t])terrMap[t]={revenue:0,orders:0,cases:0}; terrMap[t].revenue+=parseAmt(inv.amount); terrMap[t].orders++; terrMap[t].cases+=Number(inv.cases)||0;
+    if(!acctMap[inv.account])acctMap[inv.account]={revenue:0,orders:0,cases:0,territory:inv.territory||""}; acctMap[inv.account].revenue+=parseAmt(inv.amount); acctMap[inv.account].orders++; acctMap[inv.account].cases+=Number(inv.cases)||0;
+  });
+  const months = Object.keys(monthlyMap).sort().reverse();
+  const monthLabel = k => { const [y,m]=k.split("-"); return new Date(y,m-1,1).toLocaleString("default",{month:"long",year:"numeric"}); };
+  const filtByMonth = reportMonth==="all" ? invoices : invoices.filter(i=>(i.date||"").startsWith(reportMonth));
+ 
+  const Header = ({sub}) => (
+    <div className="crm-header">
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <svg width="22" height="28" viewBox="0 0 22 28" fill="none">
+          <path d="M11 0 C11 0, 8 4, 8 9 C8 11, 9 12, 9 12 L11 14 L13 12 C13 12, 14 11, 14 9 C14 4, 11 0, 11 0Z" fill="#bcd6ef"/>
+          <path d="M11 4 C11 4, 6 8, 5 14 C5 18, 7 20, 7 20 L11 24 L15 20 C15 20, 17 18, 17 14 C16 8, 11 4, 11 4Z" fill="#4a90d9"/>
+          <path d="M11 10 C11 10, 4 14, 3 22 C3 25, 5 27, 5 27 L11 28 L17 27 C17 27, 19 25, 19 22 C18 14, 11 10, 11 10Z" fill="#1a4480" opacity="0.85"/>
+        </svg>
+        <div><p className="logo-wordmark">DIOS AZUL</p><p className="logo-sub">{sub||"Distribution CRM"}</p></div>
+      </div>
+    </div>
+  );
+ 
+  // Account form
+  if (view==="add" || view==="edit") {
+    const F = k => ({value: form[k]||"", onChange: e=>setForm(p=>({...p,[k]:e.target.value}))});
+    const save = () => { const u = view==="add"?[...accounts,{...form,id:Date.now(),activityLog:[]}]:accounts.map(a=>a.id===form.id?form:a); persist("da_accounts",setAccounts,u); setView("list"); };
+    const del = () => { persist("da_accounts",setAccounts,accounts.filter(a=>a.id!==form.id)); setView("list"); };
+    const convertToLead = () => { const nl={...emptyLead,id:"L"+Date.now(),name:form.name,type:form.type,city:form.city,address:form.address,contact:form.contact,phone:form.phone,email:form.email,notes:form.notes,createdAt:today,activityLog:form.activityLog||[]}; persist("da_leads",setLeads,[...leads,nl]); persist("da_accounts",setAccounts,accounts.filter(a=>a.id!==form.id)); setTab("leads"); setView("list"); };
+    return (<div className="crm-root"><Header/>
+      <button className="btn-ghost" onClick={()=>setView("list")}>&larr; Accounts</button>
+      <p className="form-title">{view==="add"?"New Account":"Edit Account"}</p>
+      <div className="form-wrap">
+        <div className="fr"><div><label className="fl">Name</label><input className="fi" {...F("name")}/></div><div><label className="fl">Type</label><select className="fs" {...F("type")}>{["Bar","Restaurant","Hotel","Retail"].map(t=><option key={t}>{t}</option>)}</select></div></div>
+        <div className="fr"><div><label className="fl">City</label><input className="fi" {...F("city")}/></div><div><label className="fl">Phone</label><input className="fi" {...F("phone")}/></div></div>
+        <div className="fr1"><div><label className="fl">Address</label><input className="fi" {...F("address")}/></div></div>
+        <div className="fr"><div><label className="fl">Contact</label><input className="fi" {...F("contact")}/></div><div><label className="fl">Email</label><input className="fi" {...F("email")}/></div></div>
+        <div className="fr1"><div><label className="fl">Products Carrying</label><div className="expr-row">{["Plata","Reposado","A\u00f1ejo","Extra A\u00f1ejo"].map(p=>{const sel=(form.products||"").split(",").map(s=>s.trim()).filter(Boolean);const on=sel.includes(p);return <button key={p} type="button" className={"expr-btn"+(on?" active":"")} onClick={()=>{const nx=on?sel.filter(s=>s!==p):[...sel,p];setForm(pr=>({...pr,products:nx.join(", ")}));}}>{p}</button>;})}</div></div></div>
+        <div className="fr1"><div><label className="fl">Notes</label><textarea className="fta" {...F("notes")}/></div></div>
+        {view==="edit" && <><hr className="divider" style={{margin:"24px 0 12px"}}/><p className="fl" style={{marginBottom:8}}>Visit Log</p>
+          <input className="fi" placeholder="Add visit note... (Enter to save)" style={{marginBottom:12}} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const ne={date:today,type:"Visit",note:e.target.value.trim()};const lg=Array.isArray(form.activityLog)?form.activityLog:[];const u={...form,activityLog:[ne,...lg]};setForm(u);persist("da_accounts",setAccounts,accounts.map(a=>a.id===form.id?u:a));e.target.value="";}}}/>
+          {(form.activityLog||[]).length===0 && <p style={{fontSize:10,color:"var(--text-dim)",fontStyle:"italic",marginBottom:12}}>No visits logged yet.</p>}
+          {(form.activityLog||[]).map((en,i)=>(<div key={i} style={{background:"var(--surface2)",border:"1px solid var(--border)",borderLeft:"3px solid var(--navy)",padding:"10px 14px",marginBottom:5}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:9,color:"var(--navy)",letterSpacing:"0.1em",textTransform:"uppercase",fontWeight:600}}>{en.type||"Visit"}</span><span style={{fontSize:10,color:"var(--text-dim)"}}>{en.date}</span></div><p style={{fontSize:11,margin:0,lineHeight:1.5}}>{en.note}</p></div>))}
+        </>}
+        <div className="action-row" style={{marginTop:24}}><button className="btn-primary" onClick={save}>Save</button>{view==="edit"&&<><button className="btn-del" onClick={del}>Delete</button><button className="btn-secondary" style={{color:"var(--gold-dark)",borderColor:"rgba(201,169,97,0.5)"}} onClick={convertToLead}>Move to Leads</button></>}<button className="btn-secondary" onClick={()=>setView("list")}>Cancel</button></div>
+      </div></div>);
+  }
+ 
+  // Lead form
+  if (view==="add-lead" || view==="edit-lead") {
+    const F = k => ({value: lform[k]||"", onChange: e=>setLform(p=>({...p,[k]:e.target.value}))});
+    const save = () => { const u = view==="add-lead"?[...leads,{...lform,id:"L"+Date.now(),createdAt:today,activityLog:[]}]:leads.map(l=>l.id===lform.id?lform:l); persist("da_leads",setLeads,u); setTab("leads"); setView("list"); };
+    const del = () => { persist("da_leads",setLeads,leads.filter(l=>l.id!==lform.id)); setTab("leads"); setView("list"); };
+    const conv = () => { const na={...emptyAccount,id:Date.now(),name:lform.name,type:lform.type,city:lform.city,address:lform.address,contact:lform.contact,phone:lform.phone,email:lform.email,notes:lform.notes,activityLog:lform.activityLog||[]}; persist("da_accounts",setAccounts,[...accounts,na]); persist("da_leads",setLeads,leads.filter(l=>l.id!==lform.id)); setTab("accounts"); setView("list"); };
+    return (<div className="crm-root"><Header/>
+      <button className="btn-ghost" onClick={()=>{setTab("leads");setView("list");}}>&larr; Leads</button>
+      <p className="form-title">{view==="add-lead"?"New Lead":"Edit Lead"}</p>
+      <div className="form-wrap">
+        <div className="fr"><div><label className="fl">Name</label><input className="fi" {...F("name")}/></div><div><label className="fl">Type</label><select className="fs" {...F("type")}>{["Bar","Restaurant","Hotel","Retail"].map(t=><option key={t}>{t}</option>)}</select></div></div>
+        <div className="fr"><div><label className="fl">City</label><input className="fi" {...F("city")}/></div><div><label className="fl">Phone</label><input className="fi" {...F("phone")}/></div></div>
+        <div className="fr1"><div><label className="fl">Address</label><input className="fi" {...F("address")}/></div></div>
+        <div className="fr"><div><label className="fl">Contact</label><input className="fi" {...F("contact")}/></div><div><label className="fl">Source</label><input className="fi" {...F("source")}/></div></div>
+        <div className="fr1"><div><label className="fl">Notes</label><textarea className="fta" {...F("notes")}/></div></div>
+        {view==="edit-lead" && <><hr className="divider" style={{margin:"24px 0 12px"}}/><p className="fl" style={{marginBottom:8}}>Visit Log</p>
+          <input className="fi" placeholder="Add visit note... (Enter to save)" style={{marginBottom:12}} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const ne={date:today,type:"Visit",note:e.target.value.trim()};const lg=Array.isArray(lform.activityLog)?lform.activityLog:[];const u={...lform,activityLog:[ne,...lg]};setLform(u);persist("da_leads",setLeads,leads.map(l=>l.id===lform.id?u:l));e.target.value="";}}}/>
+          {(lform.activityLog||[]).map((en,i)=>(<div key={i} style={{background:"var(--surface2)",border:"1px solid var(--border)",borderLeft:"3px solid var(--lead-accent)",padding:"10px 14px",marginBottom:5}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:9,color:"var(--gold-dark)",letterSpacing:"0.1em",textTransform:"uppercase",fontWeight:600}}>{en.type||"Visit"}</span><span style={{fontSize:10,color:"var(--text-dim)"}}>{en.date}</span></div><p style={{fontSize:11,margin:0,lineHeight:1.5}}>{en.note}</p></div>))}
+        </>}
+        <div className="action-row" style={{marginTop:24}}><button className="btn-primary" onClick={save}>Save</button>{view==="edit-lead"&&<><button className="btn-del" onClick={del}>Delete</button><button className="btn-secondary" onClick={conv}>Convert to Account</button></>}<button className="btn-secondary" onClick={()=>{setTab("leads");setView("list");}}>Cancel</button></div>
+      </div></div>);
+  }
+ 
+  // Invoice form
+  if (view==="add-invoice" || view==="edit-invoice") {
+    const F = k => ({value: iform[k]||"", onChange: e=>setIform(p=>({...p,[k]:e.target.value}))});
+    const save = () => { const u = view==="add-invoice"?[...invoices,{...iform,id:Date.now()}]:invoices.map(i=>i.id===iform.id?iform:i); persist("da_invoices",setInvoices,u); setTab("invoices"); setView("list"); };
+    const del = () => { persist("da_invoices",setInvoices,invoices.filter(i=>i.id!==iform.id)); setTab("invoices"); setView("list"); };
+    return (<div className="crm-root"><Header/>
+      <button className="btn-ghost" onClick={()=>{setTab("invoices");setView("list");}}>&larr; Invoices</button>
+      <p className="form-title">{view==="add-invoice"?"New Invoice":"Edit Invoice"}</p>
+      <div className="form-wrap">
+        <div className="fr"><div><label className="fl">Account</label><input className="fi" {...F("account")}/></div><div><label className="fl">Date</label><input className="fi" type="date" {...F("date")}/></div></div>
+        <div className="fr"><div><label className="fl">Territory</label><input className="fi" {...F("territory")}/></div><div><label className="fl">Cases</label><input className="fi" type="number" {...F("cases")}/></div></div>
+        <div className="fr"><div><label className="fl">Products</label><input className="fi" {...F("products")}/></div><div><label className="fl">Amount</label><input className="fi" {...F("amount")}/></div></div>
+        <div className="fr1"><div><label className="fl">Notes</label><textarea className="fta" {...F("notes")}/></div></div>
+        <div className="action-row"><button className="btn-primary" onClick={save}>Save</button>{view==="edit-invoice"&&<button className="btn-del" onClick={del}>Delete</button>}<button className="btn-secondary" onClick={()=>{setTab("invoices");setView("list");}}>Cancel</button></div>
+      </div></div>);
+  }
+ 
+  return (<div className="crm-root">
+    <div className="crm-header">
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <svg width="22" height="28" viewBox="0 0 22 28" fill="none">
+          <path d="M11 0 C11 0, 8 4, 8 9 C8 11, 9 12, 9 12 L11 14 L13 12 C13 12, 14 11, 14 9 C14 4, 11 0, 11 0Z" fill="#bcd6ef"/>
+          <path d="M11 4 C11 4, 6 8, 5 14 C5 18, 7 20, 7 20 L11 24 L15 20 C15 20, 17 18, 17 14 C16 8, 11 4, 11 4Z" fill="#4a90d9"/>
+          <path d="M11 10 C11 10, 4 14, 3 22 C3 25, 5 27, 5 27 L11 28 L17 27 C17 27, 19 25, 19 22 C18 14, 11 10, 11 10Z" fill="#1a4480" opacity="0.85"/>
+        </svg>
+        <div><p className="logo-wordmark">DIOS AZUL</p><p className="logo-sub">Distribution CRM &middot; Melbourne &middot; South FL</p></div>
+      </div>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {tab==="accounts" && <button className="btn-primary" onClick={()=>{setForm({...emptyAccount,id:null});setView("add");}}>+ Account</button>}
+        {tab==="leads" && <button className="btn-primary" style={{background:"var(--gold-dark)"}} onClick={()=>{setLform({...emptyLead,id:null});setView("add-lead");}}>+ Lead</button>}
+        {tab==="invoices" && <button className="btn-primary" style={{background:"var(--green)"}} onClick={()=>{setIform({...emptyInvoice,id:null,date:today});setView("add-invoice");}}>+ Invoice</button>}
+      </div>
+    </div>
+ 
+    <div className="tab-row">
+      <button className={"tab"+(tab==="accounts"?" active":"")} onClick={()=>switchTab("accounts")}>Accounts <span className="tab-badge">{accounts.length}</span></button>
+      <button className={"tab"+(tab==="leads"?" active":"")} onClick={()=>switchTab("leads")}>Leads <span className="tab-badge">{leads.length}</span></button>
+      <button className={"tab"+(tab==="invoices"?" active":"")} onClick={()=>switchTab("invoices")}>Invoices <span className="tab-badge">{invoices.length}</span></button>
+      <button className={"tab"+(tab==="reports"?" active":"")} onClick={()=>switchTab("reports")}>Reports</button>
+      <button className="tab" style={{marginLeft:"auto"}} onClick={()=>setShowSettings(true)}><span className={"sync-dot "+(autoSync&&syncUrl?"on":"off")}></span>Sync</button>
+      <button className="tab" style={{color:"var(--gold-dark)"}} title="Push" onClick={()=>cloudPush(false)}>&uarr;</button>
+      <button className="tab" style={{color:"var(--gold-dark)"}} title="Pull" onClick={cloudPull}>&darr;</button>
+    </div>
+ 
+    <div className="content">
+      {tab==="accounts" && <>
+        <div className="controls">
+          <input className="search-input" placeholder="Search accounts..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          <button className={"select-mode-btn"+(selectMode?" active":"")} onClick={()=>{setSelectMode(!selectMode);setSelectedIds(new Set());}}>{selectMode?"Cancel":"Select"}</button>
+          {types.map(t=><button key={t} className={"filter-btn"+(filterType===t?" active":"")} onClick={()=>setFilterType(t)}>{t==="All"?"All ("+accounts.length+")":t}</button>)}
+        </div>
+        {selectMode && selectedIds.size>0 && <div className="selection-bar"><span className="count">{selectedIds.size}</span><span className="label">Selected</span><button className="bulk-btn" onClick={()=>setSelectedIds(new Set(filteredAccounts.map(a=>a.id)))}>All Visible</button><button className="bulk-btn" onClick={bulkConvertAccountsToLeads}>To Leads</button><button className="bulk-btn danger" onClick={bulkDelete}>Delete</button><button className="bulk-btn" onClick={clearSelection}>Clear</button></div>}
+        <div className="count-label">{filteredAccounts.length} ACCOUNTS</div>
+        {filteredAccounts.map(a=>{const sel=selectedIds.has(a.id);return <div key={a.id} className={"card acct"+(sel?" selected":"")} onClick={()=>{if(selectMode)toggleSelect(a.id);else{setForm(a);setView("edit");}}}><div className="card-row">{selectMode&&<span className={"checkbox"+(sel?" checked":"")}/>}<div style={{flex:1,minWidth:0}}><p className="card-name">{a.name}</p><p className="card-meta">{[a.city,a.contact,a.phone].filter(Boolean).join(" \u00b7 ")}</p>{a.products&&<p style={{fontSize:10,color:"var(--navy)",marginTop:3}}>{a.products}</p>}</div><span className="type-chip">{a.type}</span></div></div>;})}
+      </>}
+ 
+      {tab==="leads" && <>
+        <div className="controls">
+          <input className="search-input" placeholder="Search leads..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          <button className={"select-mode-btn"+(selectMode?" active":"")} onClick={()=>{setSelectMode(!selectMode);setSelectedIds(new Set());}}>{selectMode?"Cancel":"Select"}</button>
+          {types.map(t=><button key={t} className={"filter-btn"+(filterType===t?" active":"")} onClick={()=>setFilterType(t)}>{t==="All"?"All ("+leads.length+")":t}</button>)}
+        </div>
+        {selectMode && selectedIds.size>0 && <div className="selection-bar"><span className="count">{selectedIds.size}</span><span className="label">Selected</span><button className="bulk-btn" onClick={()=>setSelectedIds(new Set(filteredLeads.map(l=>l.id)))}>All Visible</button><button className="bulk-btn" onClick={bulkConvertLeadsToAccounts}>To Accounts</button><button className="bulk-btn danger" onClick={bulkDelete}>Delete</button><button className="bulk-btn" onClick={clearSelection}>Clear</button></div>}
+        <div className="count-label">{filteredLeads.length} LEADS</div>
+        {filteredLeads.map(l=>{const sel=selectedIds.has(l.id);return <div key={l.id} className={"card lead"+(sel?" selected":"")} onClick={()=>{if(selectMode)toggleSelect(l.id);else{setLform(l);setView("edit-lead");}}}><div className="card-row">{selectMode&&<span className={"checkbox"+(sel?" checked":"")}/>}<div style={{flex:1,minWidth:0}}><p className="card-name">{l.name}</p><p className="card-meta">{[l.city,l.contact,l.phone].filter(Boolean).join(" \u00b7 ")}</p>{l.source&&<p style={{fontSize:10,color:"var(--gold-dark)",marginTop:3}}>via {l.source}</p>}</div><span className="lead-chip">LEAD</span></div></div>;})}
+      </>}
+ 
+      {tab==="invoices" && <>
+        {invoices.length>0 && <div className="kpi-row"><div className="kpi"><p className="kpi-label">Total Revenue</p><p className="kpi-val green">{fmt(totalRev)}</p></div><div className="kpi"><p className="kpi-label">Company Income</p><p className="kpi-val" style={{color:"var(--gold-dark)"}}>{fmt(totalCases*65)}</p><p className="kpi-sub">$65 / case</p></div><div className="kpi"><p className="kpi-label">Orders</p><p className="kpi-val">{invoices.length}</p></div><div className="kpi"><p className="kpi-label">Cases</p><p className="kpi-val warm">{totalCases}</p></div></div>}
+        <div className="controls"><input className="search-input" placeholder="Search invoices..." value={invSearch} onChange={e=>setInvSearch(e.target.value)}/><button className={"select-mode-btn"+(selectMode?" active":"")} onClick={()=>{setSelectMode(!selectMode);setSelectedIds(new Set());}}>{selectMode?"Cancel":"Select"}</button></div>
+        {selectMode && selectedIds.size>0 && <div className="selection-bar"><span className="count">{selectedIds.size}</span><span className="label">Selected</span><button className="bulk-btn danger" onClick={bulkDelete}>Delete</button><button className="bulk-btn" onClick={clearSelection}>Clear</button></div>}
+        <div className="count-label">{filteredInvoices.length} INVOICES</div>
+        {filteredInvoices.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(inv=>{const sel=selectedIds.has(inv.id);return <div key={inv.id} className={"card inv"+(sel?" selected":"")} onClick={()=>{if(selectMode)toggleSelect(inv.id);else{setIform(inv);setView("edit-invoice");}}}><div className="card-row">{selectMode&&<span className={"checkbox"+(sel?" checked":"")}/>}<div style={{flex:1,minWidth:0}}><p className="card-name">{inv.account}</p><p className="card-meta">{[inv.products,inv.cases?inv.cases+" cases":null,inv.territory].filter(Boolean).join(" \u00b7 ")}</p></div><div style={{textAlign:"right",flexShrink:0}}><p className="card-amt">{inv.amount}</p><p className="card-date">{inv.date}</p></div></div></div>;})}
+      </>}
+ 
+      {tab==="reports" && <>
+        <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,marginBottom:4}}>Sales Reports</p>
+        <div className="kpi-row"><div className="kpi"><p className="kpi-label">Total Revenue</p><p className="kpi-val green">{fmt(totalRev)}</p><p className="kpi-sub">{invoices.length} orders</p></div><div className="kpi"><p className="kpi-label">Company Income</p><p className="kpi-val" style={{color:"var(--gold-dark)"}}>{fmt(totalCases*65)}</p><p className="kpi-sub">$65 &times; {totalCases}</p></div><div className="kpi"><p className="kpi-label">Cases</p><p className="kpi-val">{totalCases}</p></div><div className="kpi"><p className="kpi-label">Avg Order</p><p className="kpi-val warm">{invoices.length?fmt(totalRev/invoices.length):"$0"}</p></div></div>
+        <p className="section-title">Monthly</p>
+        {months.map(m=>{const d=monthlyMap[m];const pct=totalRev>0?(d.revenue/totalRev)*100:0;return <div key={m} className="rpt-bar-row"><div className="rpt-row-top"><span className="rpt-name">{monthLabel(m)}</span><span className="rpt-amt" style={{color:"var(--navy)"}}>{fmt(d.revenue)}</span></div><div className="bar-track"><div className="bar-fill" style={{width:pct+"%"}}/></div><p className="rpt-meta">{d.orders} orders &middot; {d.cases} cases</p></div>;})}
+        <p className="section-title">By Territory</p>
+        {Object.entries(terrMap).sort((a,b)=>b[1].revenue-a[1].revenue).map(([t,d])=><div key={t} className="rpt-bar-row green"><div className="rpt-row-top"><span className="rpt-name">{t}</span><span className="rpt-amt" style={{color:"var(--green)"}}>{fmt(d.revenue)}</span></div><p className="rpt-meta">{d.orders} orders &middot; {d.cases} cases</p></div>)}
+        <p className="section-title">By Account</p>
+        {Object.entries(acctMap).sort((a,b)=>b[1].revenue-a[1].revenue).map(([ac,d])=><div key={ac} className="rpt-bar-row warm"><div className="rpt-row-top"><span className="rpt-name">{ac}</span><span className="rpt-amt" style={{color:"var(--warn)"}}>{fmt(d.revenue)}</span></div><p className="rpt-meta">{d.territory} &middot; {d.orders} orders &middot; {d.cases} cases</p></div>)}
+      </>}
+    </div>
+ 
+    {showSettings && <div style={{position:"fixed",inset:0,background:"rgba(10,36,71,0.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setShowSettings(false)}>
+      <div style={{background:"var(--surface)",maxWidth:520,width:"100%",padding:24,border:"1px solid var(--border)"}} onClick={e=>e.stopPropagation()}>
+        <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:24,fontWeight:700,color:"var(--navy)",marginBottom:6}}>Cloud Sync</p>
+        <p style={{fontSize:11,color:"var(--text-dim)",marginBottom:18}}>Syncs across all devices via Google Sheets.</p>
+        <div style={{marginBottom:18}}><label className="fl">Apps Script Web App URL</label><input className="fi" value={syncUrl} onChange={e=>saveSyncUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec"/></div>
+        <div style={{marginBottom:18,padding:"12px 14px",background:"var(--navy-light)",border:"1px solid var(--border)"}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:11}}><input type="checkbox" checked={autoSync} onChange={toggleAutoSync}/><span><b>Auto-sync</b> &mdash; push changes automatically</span></label></div>
+        <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}><button className="btn-primary" onClick={()=>cloudPush(false)}>Push Now</button><button className="btn-primary" style={{background:"var(--gold-dark)"}} onClick={cloudPull}>Pull Now</button><button className="btn-secondary" onClick={()=>setShowSettings(false)}>Close</button></div>
+        {syncStatus && <p style={{fontSize:11,color:"var(--navy)",marginTop:8}}>{syncStatus}</p>}
+      </div>
+    </div>}
+ 
+    {syncStatus && !showSettings && <div style={{position:"fixed",bottom:60,right:20,background:"var(--navy)",color:"#fff",padding:"10px 16px",fontFamily:"DM Mono,monospace",fontSize:11,zIndex:9999}}>{syncStatus}</div>}
+    <div className={"save-toast"+(saveToast?" show":"")}>&#10003; SAVED</div>
+  </div>);
+}
+ 
+ReactDOM.createRoot(document.getElementById("root")).render(<DiosAzulCRM/>);
+</script>
+</body>
