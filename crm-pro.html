@@ -133,6 +133,17 @@ const STAGES = [
 const ACTIVITY_TYPES = ["Visit","Call","Email","Sample dropped","Tasting event","Order placed","Follow-up"];
 const COMMISSION_PER_CASE = 65;
 
+// Parse URL for ?add= parameter (one-tap add link from Claude)
+function getAddFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    const enc = url.searchParams.get("add");
+    if (!enc) return null;
+    const json = decodeURIComponent(escape(atob(enc.replace(/-/g, "+").replace(/_/g, "/"))));
+    return JSON.parse(json);
+  } catch (e) { return null; }
+}
+
 // ── Initial data — migrated from existing CRM ────────────────────────
 const ACCOUNTS_INIT = [
   {id:1,  name:"Zacapa Mexican Restaurant & Bar",  type:"Restaurant", city:"Lake Mary, FL",            address:"7025 County Rd. 46A, Suite 1011, Lake Mary, FL 32746",     contact:"Paticia",          phone:"",               email:"",                          lastContact:"2025-02-07", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
@@ -364,6 +375,7 @@ function DiosAzulCRM() {
   const pushTimer = useRef(null);
   const dirtyRef = useRef(false);
   const firstRenderRef = useRef(true);
+  const [pendingFromUrl, setPendingFromUrl] = useState(null);
 
   useEffect(() => { try { localStorage.setItem("da_records", JSON.stringify(records)); } catch {} }, [records]);
 
@@ -427,6 +439,29 @@ function DiosAzulCRM() {
     return () => { if (pushTimer.current) clearTimeout(pushTimer.current); };
   }, [records, autoSync, syncUrl]);
   useEffect(() => { if (syncUrl && !dirtyRef.current) cloudPull(); /* eslint-disable-next-line */ }, []);
+  
+  // One-tap add from URL (Claude-generated links)
+  useEffect(() => {
+    const fromUrl = getAddFromUrl();
+    if (fromUrl) {
+      setPendingFromUrl(fromUrl);
+      // Clear the URL so a refresh doesn't re-trigger
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+  
+  const acceptPending = () => {
+    const newRec = {...emptyRecord, ...pendingFromUrl, id: Date.now(), createdAt: today(), stageEntered: today(), activityLog: pendingFromUrl.activityLog || []};
+    persist([...records, newRec]);
+    setPendingFromUrl(null);
+  };
+  const editPending = () => {
+    setForm({...emptyRecord, ...pendingFromUrl, id: null, createdAt: today(), stageEntered: today(), activityLog: pendingFromUrl.activityLog || []});
+    setPendingFromUrl(null);
+    setView("add");
+  };
+  const rejectPending = () => setPendingFromUrl(null);
+
   const toggleAutoSync = () => { const n = !autoSync; setAutoSync(n); try { localStorage.setItem("da_auto_sync", n?"1":"0"); } catch {} };
 
   // ── Helpers ──
@@ -619,6 +654,41 @@ function DiosAzulCRM() {
       <button className="btn-primary" onClick={()=>{setForm({...emptyRecord,id:null});setView("add");}}>+ New</button>
     </div>
 
+    {pendingFromUrl && <div style={{background:"var(--green-bg)",border:"1px solid var(--green)",borderLeft:"4px solid var(--green)",padding:"16px 20px",margin:"16px 20px"}}>
+      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:18,fontWeight:700,color:"var(--green)",marginBottom:6}}>New Record from Claude</p>
+      <p style={{fontSize:11,color:"var(--text-mid)",marginBottom:14}}>Review and save to add to your CRM.</p>
+      {[
+        {k:"name", l:"Name"},
+        {k:"type", l:"Type"},
+        {k:"stage", l:"Stage", fmt: v => { const s = STAGES.find(x=>x.id===v); return s ? s.name : v; }},
+        {k:"city", l:"City"},
+        {k:"address", l:"Address"},
+        {k:"contact", l:"Contact"},
+        {k:"phone", l:"Phone"},
+        {k:"email", l:"Email"},
+        {k:"casesPerMonth", l:"Cases/Mo"},
+        {k:"notes", l:"Notes"}
+      ].filter(f => pendingFromUrl[f.k]).map(f => (
+        <div key={f.k} style={{display:"flex",gap:14,marginBottom:5,fontSize:11}}>
+          <span style={{color:"var(--text-dim)",minWidth:90,textTransform:"uppercase",letterSpacing:"0.08em",fontSize:9,paddingTop:2}}>{f.l}</span>
+          <span style={{flex:1,fontFamily:"DM Mono,monospace"}}>{f.fmt ? f.fmt(pendingFromUrl[f.k]) : pendingFromUrl[f.k]}</span>
+        </div>
+      ))}
+      {pendingFromUrl.activityLog && pendingFromUrl.activityLog.length > 0 && (
+        <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--green)"}}>
+          <p style={{fontSize:9,color:"var(--text-dim)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Activity to log</p>
+          {pendingFromUrl.activityLog.map((a,i) => (
+            <p key={i} style={{fontSize:11,marginBottom:3}}><b>{a.type}</b> ({a.date}): {a.note}</p>
+          ))}
+        </div>
+      )}
+      <div style={{display:"flex",gap:10,marginTop:14,flexWrap:"wrap"}}>
+        <button className="btn-primary" style={{background:"var(--green)"}} onClick={acceptPending}>Save to CRM</button>
+        <button className="btn-secondary" onClick={editPending}>Edit First</button>
+        <button className="btn-secondary" onClick={rejectPending} style={{color:"#c0392b",borderColor:"rgba(192,57,43,0.3)"}}>Discard</button>
+      </div>
+    </div>}
+    
     <div className="tab-row">
       <button className={"tab"+(tab==="pipeline"?" active":"")} onClick={()=>setTab("pipeline")}>Pipeline <span className="tab-badge">{records.length}</span></button>
       <button className={"tab"+(tab==="dashboard"?" active":"")} onClick={()=>setTab("dashboard")}>Dashboard</button>
@@ -859,6 +929,7 @@ function DiosAzulCRM() {
         <div style={{marginBottom:18}}><label className="fl">Apps Script URL</label><input className="fi" value={syncUrl} onChange={e=>saveSyncUrl(e.target.value)}/></div>
         <div style={{marginBottom:18,padding:"12px 14px",background:"var(--navy-light)",border:"1px solid var(--border)"}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:11}}><input type="checkbox" checked={autoSync} onChange={toggleAutoSync}/><span><b>Auto-sync</b></span></label></div>
         <div style={{display:"flex",gap:8}}><button className="btn-primary" onClick={()=>cloudPush(false)}>Push</button><button className="btn-primary" style={{background:"var(--gold-dark)"}} onClick={()=>cloudPull(true)}>Pull</button><button className="btn-secondary" onClick={()=>setShowSettings(false)}>Close</button></div>
+        <p style={{fontSize:10,color:"var(--text-dim)",marginTop:12,lineHeight:1.5}}>For historical backups, use Google Sheets: File → Version history → See version history.</p>
         {syncStatus && <p style={{fontSize:11,color:"var(--navy)",marginTop:12}}>{syncStatus}</p>}
       </div>
     </div>}
