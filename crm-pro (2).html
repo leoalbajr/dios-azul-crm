@@ -118,7 +118,7 @@ body { background:var(--bg); font-family:"Inter",sans-serif; -webkit-font-smooth
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
 const today = () => new Date().toISOString().split("T")[0];
-
+ 
 const STAGES = [
   {id:"s1", name:"New Lead",              color:"var(--s1)", desc:"Just identified, no contact yet"},
   {id:"s2", name:"Initial Contact",       color:"var(--s2)", desc:"First call, email, or walk-in done"},
@@ -129,10 +129,10 @@ const STAGES = [
   {id:"s7", name:"Menu Placement",        color:"var(--s7)", desc:"Listed on their menu/bar"},
   {id:"s8", name:"Continued Support",     color:"var(--s8)", desc:"Active account, ongoing relationship"},
 ];
-
+ 
 const ACTIVITY_TYPES = ["Visit","Call","Email","Sample dropped","Tasting event","Order placed","Follow-up"];
 const COMMISSION_PER_CASE = 65;
-
+ 
 // ── Initial data — migrated from existing CRM ────────────────────────
 const ACCOUNTS_INIT = [
   {id:1,  name:"Zacapa Mexican Restaurant & Bar",  type:"Restaurant", city:"Lake Mary, FL",            address:"7025 County Rd. 46A, Suite 1011, Lake Mary, FL 32746",     contact:"Paticia",          phone:"",               email:"",                          lastContact:"2025-02-07", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
@@ -197,7 +197,7 @@ const ACCOUNTS_INIT = [
   {id:60, name:"Total Wine #942 (Delray Beach)", type:"Retail", city:"Delray Beach, FL", address:"Delray Beach, FL", contact:"", phone:"", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
   {id:61, name:"Total Wine #945 (North Jacksonville)", type:"Retail", city:"North Jacksonville, FL", address:"North Jacksonville, FL", contact:"", phone:"", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]}
 ];
-
+ 
 const LEADS_INIT = [
   {id:"L01",name:"Timbr",type:"Bar",city:"Fort Lauderdale, FL",address:"15 W Las Olas Blvd",contact:"Peter",phone:"786-897-2280",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
   {id:"L02",name:"Island Liquor",type:"Retail",city:"Daytona Beach, FL",address:"425 N Atlantic Ave",contact:"Dan",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
@@ -310,7 +310,7 @@ const LEADS_INIT = [
   {id:"L110",name:"The Tiny Turtle",type:"Restaurant",city:"Cocoa Beach, FL",address:"249 Minutemen Causeway, Cocoa Beach, FL 32931",contact:"",phone:"(321) 446-7361",email:"",source:"Field",notes:"Caribbean Cuisine restaurant. ⭐ 4.6 (1,900 reviews). Open daily 9AM-9PM, Sun 9AM-3PM. Casual fusion spot, outdoor patio.",createdAt:"2026-05-26",activityLog:[]},
   {id:"L111",name:"Jazzy's Mainely Lobster & Seafood Restaurant",type:"Restaurant",city:"Cocoa Beach, FL",address:"210 N Orlando Ave, Cocoa Beach, FL 32931",contact:"",phone:"(321) 613-3993",email:"",source:"Field",notes:"Seafood restaurant. ⭐ 4.5 (4,000+ reviews). Open daily 11AM-10PM. Maine-style lobster, full bar with cocktails. Key staff: Matthew, David, Tina (bartenders).",createdAt:"2026-05-26",activityLog:[]}
 ];
-
+ 
 // Migrate: all accounts get stage s8 (Continued Support), all leads get s1 (New Lead)
 const MIGRATED_RECORDS = [
   ...ACCOUNTS_INIT.map(a => ({
@@ -328,14 +328,14 @@ const MIGRATED_RECORDS = [
     stageEntered: l.createdAt || today(),
   }))
 ];
-
+ 
 const emptyRecord = {
   id:null, name:"", type:"Bar", recordType:"lead", stage:"s1",
   city:"", address:"", contact:"", phone:"", email:"",
   casesPerMonth: 0, products:"", source:"", notes:"",
   stageEntered: today(), createdAt: today(), activityLog: []
 };
-
+ 
 function DiosAzulCRM() {
   const [records, setRecords] = useState(() => { 
     try { 
@@ -364,9 +364,9 @@ function DiosAzulCRM() {
   const pushTimer = useRef(null);
   const dirtyRef = useRef(false);
   const firstRenderRef = useRef(true);
-
+ 
   useEffect(() => { try { localStorage.setItem("da_records", JSON.stringify(records)); } catch {} }, [records]);
-
+ 
   // ── Cloud sync ──
   const saveSyncUrl = (url) => { setSyncUrl(url); try { localStorage.setItem("da_sync_url", url); } catch {} };
   const cloudPush = async (silent) => {
@@ -428,7 +428,7 @@ function DiosAzulCRM() {
   }, [records, autoSync, syncUrl]);
   useEffect(() => { if (syncUrl && !dirtyRef.current) cloudPull(); /* eslint-disable-next-line */ }, []);
   const toggleAutoSync = () => { const n = !autoSync; setAutoSync(n); try { localStorage.setItem("da_auto_sync", n?"1":"0"); } catch {} };
-
+ 
   // ── Helpers ──
   const fmt = n => "$" + (Number(n)||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
   const persist = (data) => {
@@ -439,7 +439,7 @@ function DiosAzulCRM() {
   };
   const stageIdx = sid => STAGES.findIndex(s => s.id === sid);
   const stageName = sid => { const s = STAGES.find(x=>x.id===sid); return s ? s.name : "Unknown"; };
-
+ 
   // ── Filtering ──
   const types = ["All","Bar","Restaurant","Hotel","Retail","Total Wine"];
   const matchType = item => typeFilter==="All" ? true : typeFilter==="Total Wine" ? (item.name||"").toLowerCase().includes("total wine") : item.type===typeFilter;
@@ -452,7 +452,7 @@ function DiosAzulCRM() {
     }
     return true;
   }), [records, stageFilter, typeFilter, search]);
-
+ 
   // Counts by stage
   const stageCounts = useMemo(() => {
     const c = {};
@@ -460,7 +460,7 @@ function DiosAzulCRM() {
     records.forEach(r => { if (c[r.stage]!==undefined) c[r.stage]++; });
     return c;
   }, [records]);
-
+ 
   // ── Detail / Edit view ──
   if (view==="add" || view==="edit") {
     const F = k => ({value: form[k]||"", onChange: e=>setForm(p=>({...p,[k]:e.target.value}))});
@@ -500,10 +500,10 @@ function DiosAzulCRM() {
       setActivityDate(today());
       setFollowupDate("");
     };
-
+ 
     const curStageIdx = stageIdx(form.stage);
     const estIncome = (Number(form.casesPerMonth)||0) * COMMISSION_PER_CASE;
-
+ 
     return (<div className="app">
       <div className="header"><div className="brand">
         <svg width="22" height="28" viewBox="0 0 22 28" fill="none">
@@ -532,7 +532,7 @@ function DiosAzulCRM() {
             </button>
           ))}
         </div>
-
+ 
         <div className="fr">
           <div><label className="fl">Name</label><input className="fi" {...F("name")}/></div>
           <div><label className="fl">Type</label><select className="fs" {...F("type")}>{["Bar","Restaurant","Hotel","Retail"].map(t=><option key={t}>{t}</option>)}</select></div>
@@ -604,7 +604,7 @@ function DiosAzulCRM() {
       </div>
     </div>);
   }
-
+ 
   // ── Pipeline list view ──
   return (<div className="app">
     <div className="header">
@@ -618,7 +618,7 @@ function DiosAzulCRM() {
       </div>
       <button className="btn-primary" onClick={()=>{setForm({...emptyRecord,id:null});setView("add");}}>+ New</button>
     </div>
-
+ 
     <div className="tab-row">
       <button className={"tab"+(tab==="pipeline"?" active":"")} onClick={()=>setTab("pipeline")}>Pipeline <span className="tab-badge">{records.length}</span></button>
       <button className={"tab"+(tab==="dashboard"?" active":"")} onClick={()=>setTab("dashboard")}>Dashboard</button>
@@ -627,7 +627,7 @@ function DiosAzulCRM() {
       <button className="tab" style={{color:"var(--gold-dark)"}} onClick={()=>cloudPush(false)}>&uarr;</button>
       <button className="tab" style={{color:"var(--gold-dark)"}} onClick={()=>cloudPull(true)}>&darr;</button>
     </div>
-
+ 
     <div className="content">
       {tab==="pipeline" && <>
         <div className="stage-strip">
@@ -640,12 +640,12 @@ function DiosAzulCRM() {
             </button>
           ))}
         </div>
-
+ 
         <div className="controls">
           <input className="search-input" placeholder="Search by name, city, contact..." value={search} onChange={e=>setSearch(e.target.value)}/>
           {types.map(t=><button key={t} className={"filter-btn"+(typeFilter===t?" active":"")} onClick={()=>setTypeFilter(t)}>{t}</button>)}
         </div>
-
+ 
         <div className="count-label">{filtered.length} RECORDS{stageFilter!=="all" && " · " + stageName(stageFilter).toUpperCase()}</div>
         {filtered.map(r => (
           <div key={r.id} className={"card "+r.stage} onClick={()=>{setForm(r);setView("edit");}}>
@@ -662,7 +662,7 @@ function DiosAzulCRM() {
         ))}
         {filtered.length===0 && <p style={{textAlign:"center",padding:40,color:"var(--text-dim)"}}>No records match your filters.</p>}
       </>}
-
+ 
       {tab==="dashboard" && (() => {
         const now = new Date();
         const thisMonth = now.toISOString().slice(0,7);  // "2026-05"
@@ -742,7 +742,7 @@ function DiosAzulCRM() {
             </div>
             <p style={{fontSize:10,color:"var(--text-dim)",marginTop:6,textAlign:"right"}}>{Math.round(goalProgress)}% to goal</p>
           </div>
-
+ 
           {/* KPI Row */}
           <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
             <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
@@ -766,7 +766,7 @@ function DiosAzulCRM() {
               <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
             </div>
           </div>
-
+ 
           {/* Follow-ups due */}
           {followUpsDue.length > 0 && (
             <div style={{background:"var(--warn-bg)",border:"1px solid var(--warn)",borderLeft:"4px solid var(--warn)",padding:"14px 18px",marginBottom:20}}>
@@ -784,7 +784,7 @@ function DiosAzulCRM() {
               {followUpsDue.length > 5 && <p style={{fontSize:10,color:"var(--text-dim)",marginTop:8,fontStyle:"italic"}}>+ {followUpsDue.length - 5} more</p>}
             </div>
           )}
-
+ 
           {/* Pipeline Funnel */}
           <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Pipeline Funnel</p>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
@@ -806,7 +806,7 @@ function DiosAzulCRM() {
               </div>
             ))}
           </div>
-
+ 
           {/* Two-column layout for Top Opps and Recent Activity */}
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
             {/* Top Opportunities */}
@@ -828,7 +828,7 @@ function DiosAzulCRM() {
                 ))}
               </div>
             </div>
-
+ 
             {/* Recent Activity */}
             <div style={{flex:"1 1 300px"}}>
               <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Recent Activity</p>
@@ -852,7 +852,7 @@ function DiosAzulCRM() {
       })()}
       {tab==="reports" && <p style={{padding:40,textAlign:"center",color:"var(--text-dim)"}}>Reports coming in Pass 4 — charts, breakdowns</p>}
     </div>
-
+ 
     {showSettings && <div style={{position:"fixed",inset:0,background:"rgba(10,36,71,0.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setShowSettings(false)}>
       <div style={{background:"var(--surface)",maxWidth:520,width:"100%",padding:24,border:"1px solid var(--border)"}} onClick={e=>e.stopPropagation()}>
         <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:24,fontWeight:700,color:"var(--navy)",marginBottom:6}}>Cloud Sync</p>
@@ -862,12 +862,12 @@ function DiosAzulCRM() {
         {syncStatus && <p style={{fontSize:11,color:"var(--navy)",marginTop:12}}>{syncStatus}</p>}
       </div>
     </div>}
-
+ 
     {syncStatus && !showSettings && <div style={{position:"fixed",bottom:60,right:20,background:"var(--navy)",color:"#fff",padding:"10px 16px",fontFamily:"DM Mono,monospace",fontSize:11,zIndex:9999}}>{syncStatus}</div>}
     <div className={"save-toast"+(saveToast?" show":"")}>&#10003; SAVED</div>
   </div>);
 }
-
+ 
 ReactDOM.createRoot(document.getElementById("root")).render(<DiosAzulCRM/>);
 </script>
 </body>
