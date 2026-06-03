@@ -118,7 +118,7 @@ body { background:var(--bg); font-family:"Inter",sans-serif; -webkit-font-smooth
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
 const today = () => new Date().toISOString().split("T")[0];
- 
+
 const STAGES = [
   {id:"s1", name:"New Lead",              color:"var(--s1)", desc:"Just identified, no contact yet"},
   {id:"s2", name:"Initial Contact",       color:"var(--s2)", desc:"First call, email, or walk-in done"},
@@ -129,10 +129,10 @@ const STAGES = [
   {id:"s7", name:"Menu Placement",        color:"var(--s7)", desc:"Listed on their menu/bar"},
   {id:"s8", name:"Continued Support",     color:"var(--s8)", desc:"Active account, ongoing relationship"},
 ];
- 
+
 const ACTIVITY_TYPES = ["Visit","Call","Email","Sample dropped","Tasting event","Order placed","Follow-up"];
 const COMMISSION_PER_CASE = 65;
- 
+
 // ── Initial data — migrated from existing CRM ────────────────────────
 const ACCOUNTS_INIT = [
   {id:1,  name:"Zacapa Mexican Restaurant & Bar",  type:"Restaurant", city:"Lake Mary, FL",            address:"7025 County Rd. 46A, Suite 1011, Lake Mary, FL 32746",     contact:"Paticia",          phone:"",               email:"",                          lastContact:"2025-02-07", nextFollowUp:"", products:"",               notes:"", activityLog:[]},
@@ -197,7 +197,7 @@ const ACCOUNTS_INIT = [
   {id:60, name:"Total Wine #942 (Delray Beach)", type:"Retail", city:"Delray Beach, FL", address:"Delray Beach, FL", contact:"", phone:"", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]},
   {id:61, name:"Total Wine #945 (North Jacksonville)", type:"Retail", city:"North Jacksonville, FL", address:"North Jacksonville, FL", contact:"", phone:"", email:"", lastContact:"", nextFollowUp:"", products:"", notes:"Total Wine & More retail chain location. Currently carrying Dios Azul.", activityLog:[]}
 ];
- 
+
 const LEADS_INIT = [
   {id:"L01",name:"Timbr",type:"Bar",city:"Fort Lauderdale, FL",address:"15 W Las Olas Blvd",contact:"Peter",phone:"786-897-2280",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
   {id:"L02",name:"Island Liquor",type:"Retail",city:"Daytona Beach, FL",address:"425 N Atlantic Ave",contact:"Dan",phone:"",email:"",source:"Spreadsheet",notes:"",createdAt:"2026-03-31",activityLog:[]},
@@ -310,7 +310,7 @@ const LEADS_INIT = [
   {id:"L110",name:"The Tiny Turtle",type:"Restaurant",city:"Cocoa Beach, FL",address:"249 Minutemen Causeway, Cocoa Beach, FL 32931",contact:"",phone:"(321) 446-7361",email:"",source:"Field",notes:"Caribbean Cuisine restaurant. ⭐ 4.6 (1,900 reviews). Open daily 9AM-9PM, Sun 9AM-3PM. Casual fusion spot, outdoor patio.",createdAt:"2026-05-26",activityLog:[]},
   {id:"L111",name:"Jazzy's Mainely Lobster & Seafood Restaurant",type:"Restaurant",city:"Cocoa Beach, FL",address:"210 N Orlando Ave, Cocoa Beach, FL 32931",contact:"",phone:"(321) 613-3993",email:"",source:"Field",notes:"Seafood restaurant. ⭐ 4.5 (4,000+ reviews). Open daily 11AM-10PM. Maine-style lobster, full bar with cocktails. Key staff: Matthew, David, Tina (bartenders).",createdAt:"2026-05-26",activityLog:[]}
 ];
- 
+
 // Migrate: all accounts get stage s8 (Continued Support), all leads get s1 (New Lead)
 const MIGRATED_RECORDS = [
   ...ACCOUNTS_INIT.map(a => ({
@@ -328,14 +328,14 @@ const MIGRATED_RECORDS = [
     stageEntered: l.createdAt || today(),
   }))
 ];
- 
+
 const emptyRecord = {
   id:null, name:"", type:"Bar", recordType:"lead", stage:"s1",
   city:"", address:"", contact:"", phone:"", email:"",
   casesPerMonth: 0, products:"", source:"", notes:"",
   stageEntered: today(), createdAt: today(), activityLog: []
 };
- 
+
 function DiosAzulCRM() {
   const [records, setRecords] = useState(() => { 
     try { 
@@ -358,13 +358,15 @@ function DiosAzulCRM() {
   const [syncStatus, setSyncStatus] = useState("");
   const [autoSync, setAutoSync] = useState(() => { try { return localStorage.getItem("da_auto_sync") === "1"; } catch { return false; } });
   const [showSettings, setShowSettings] = useState(false);
+  const [monthlyGoal, setMonthlyGoal] = useState(() => { try { return parseInt(localStorage.getItem("da_monthly_goal"))||75; } catch { return 75; } });
+  const saveMonthlyGoal = (n) => { setMonthlyGoal(n); try { localStorage.setItem("da_monthly_goal", String(n)); } catch {} };
   const toastTimer = useRef(null);
   const pushTimer = useRef(null);
   const dirtyRef = useRef(false);
   const firstRenderRef = useRef(true);
- 
+
   useEffect(() => { try { localStorage.setItem("da_records", JSON.stringify(records)); } catch {} }, [records]);
- 
+
   // ── Cloud sync ──
   const saveSyncUrl = (url) => { setSyncUrl(url); try { localStorage.setItem("da_sync_url", url); } catch {} };
   const cloudPush = async (silent) => {
@@ -385,11 +387,35 @@ function DiosAzulCRM() {
     }
     setSyncStatus("Pulling from cloud...");
     try {
-      const res = await fetch(syncUrl + "?type=records&_=" + Date.now());
+      const res = await fetch(syncUrl + "?type=all&_=" + Date.now());
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      if (data.records) { setRecords(data.records); localStorage.setItem("da_records", JSON.stringify(data.records)); }
-      setSyncStatus("Pulled at " + new Date().toLocaleTimeString()); setTimeout(()=>setSyncStatus(""), 3000);
+      
+      let newRecords = null;
+      // Prefer records tab if it exists and has data
+      if (Array.isArray(data.records) && data.records.length > 0) {
+        newRecords = data.records;
+      } 
+      // Otherwise migrate from accounts + leads on the fly
+      else if ((Array.isArray(data.accounts) && data.accounts.length > 0) || (Array.isArray(data.leads) && data.leads.length > 0)) {
+        const migrated = [];
+        (data.accounts || []).forEach(a => {
+          migrated.push({...a, recordType:"account", stage:"s8", casesPerMonth:Number(a.casesPerMonth)||0, stageEntered:a.createdAt||today(), activityLog:Array.isArray(a.activityLog)?a.activityLog:[]});
+        });
+        (data.leads || []).forEach(l => {
+          migrated.push({...l, recordType:"lead", stage:"s1", casesPerMonth:Number(l.casesPerMonth)||0, stageEntered:l.createdAt||today(), activityLog:Array.isArray(l.activityLog)?l.activityLog:[]});
+        });
+        newRecords = migrated;
+      }
+      
+      if (newRecords) {
+        setRecords(newRecords);
+        try { localStorage.setItem("da_records", JSON.stringify(newRecords)); } catch {}
+        setSyncStatus("Pulled " + newRecords.length + " records at " + new Date().toLocaleTimeString());
+      } else {
+        setSyncStatus("Pulled (no data to update) at " + new Date().toLocaleTimeString());
+      }
+      setTimeout(()=>setSyncStatus(""), 3000);
     } catch (err) { setSyncStatus("Pull failed: " + err.message); }
   };
   useEffect(() => {
@@ -402,7 +428,7 @@ function DiosAzulCRM() {
   }, [records, autoSync, syncUrl]);
   useEffect(() => { if (syncUrl && !dirtyRef.current) cloudPull(); /* eslint-disable-next-line */ }, []);
   const toggleAutoSync = () => { const n = !autoSync; setAutoSync(n); try { localStorage.setItem("da_auto_sync", n?"1":"0"); } catch {} };
- 
+
   // ── Helpers ──
   const fmt = n => "$" + (Number(n)||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
   const persist = (data) => {
@@ -413,7 +439,7 @@ function DiosAzulCRM() {
   };
   const stageIdx = sid => STAGES.findIndex(s => s.id === sid);
   const stageName = sid => { const s = STAGES.find(x=>x.id===sid); return s ? s.name : "Unknown"; };
- 
+
   // ── Filtering ──
   const types = ["All","Bar","Restaurant","Hotel","Retail","Total Wine"];
   const matchType = item => typeFilter==="All" ? true : typeFilter==="Total Wine" ? (item.name||"").toLowerCase().includes("total wine") : item.type===typeFilter;
@@ -426,7 +452,7 @@ function DiosAzulCRM() {
     }
     return true;
   }), [records, stageFilter, typeFilter, search]);
- 
+
   // Counts by stage
   const stageCounts = useMemo(() => {
     const c = {};
@@ -434,7 +460,7 @@ function DiosAzulCRM() {
     records.forEach(r => { if (c[r.stage]!==undefined) c[r.stage]++; });
     return c;
   }, [records]);
- 
+
   // ── Detail / Edit view ──
   if (view==="add" || view==="edit") {
     const F = k => ({value: form[k]||"", onChange: e=>setForm(p=>({...p,[k]:e.target.value}))});
@@ -474,10 +500,10 @@ function DiosAzulCRM() {
       setActivityDate(today());
       setFollowupDate("");
     };
- 
+
     const curStageIdx = stageIdx(form.stage);
     const estIncome = (Number(form.casesPerMonth)||0) * COMMISSION_PER_CASE;
- 
+
     return (<div className="app">
       <div className="header"><div className="brand">
         <svg width="22" height="28" viewBox="0 0 22 28" fill="none">
@@ -506,7 +532,7 @@ function DiosAzulCRM() {
             </button>
           ))}
         </div>
- 
+
         <div className="fr">
           <div><label className="fl">Name</label><input className="fi" {...F("name")}/></div>
           <div><label className="fl">Type</label><select className="fs" {...F("type")}>{["Bar","Restaurant","Hotel","Retail"].map(t=><option key={t}>{t}</option>)}</select></div>
@@ -578,7 +604,7 @@ function DiosAzulCRM() {
       </div>
     </div>);
   }
- 
+
   // ── Pipeline list view ──
   return (<div className="app">
     <div className="header">
@@ -592,7 +618,7 @@ function DiosAzulCRM() {
       </div>
       <button className="btn-primary" onClick={()=>{setForm({...emptyRecord,id:null});setView("add");}}>+ New</button>
     </div>
- 
+
     <div className="tab-row">
       <button className={"tab"+(tab==="pipeline"?" active":"")} onClick={()=>setTab("pipeline")}>Pipeline <span className="tab-badge">{records.length}</span></button>
       <button className={"tab"+(tab==="dashboard"?" active":"")} onClick={()=>setTab("dashboard")}>Dashboard</button>
@@ -601,7 +627,7 @@ function DiosAzulCRM() {
       <button className="tab" style={{color:"var(--gold-dark)"}} onClick={()=>cloudPush(false)}>&uarr;</button>
       <button className="tab" style={{color:"var(--gold-dark)"}} onClick={()=>cloudPull(true)}>&darr;</button>
     </div>
- 
+
     <div className="content">
       {tab==="pipeline" && <>
         <div className="stage-strip">
@@ -614,12 +640,12 @@ function DiosAzulCRM() {
             </button>
           ))}
         </div>
- 
+
         <div className="controls">
           <input className="search-input" placeholder="Search by name, city, contact..." value={search} onChange={e=>setSearch(e.target.value)}/>
           {types.map(t=><button key={t} className={"filter-btn"+(typeFilter===t?" active":"")} onClick={()=>setTypeFilter(t)}>{t}</button>)}
         </div>
- 
+
         <div className="count-label">{filtered.length} RECORDS{stageFilter!=="all" && " · " + stageName(stageFilter).toUpperCase()}</div>
         {filtered.map(r => (
           <div key={r.id} className={"card "+r.stage} onClick={()=>{setForm(r);setView("edit");}}>
@@ -636,11 +662,197 @@ function DiosAzulCRM() {
         ))}
         {filtered.length===0 && <p style={{textAlign:"center",padding:40,color:"var(--text-dim)"}}>No records match your filters.</p>}
       </>}
- 
-      {tab==="dashboard" && <p style={{padding:40,textAlign:"center",color:"var(--text-dim)"}}>Dashboard coming in Pass 3 — goals, funnel, KPIs</p>}
+
+      {tab==="dashboard" && (() => {
+        const now = new Date();
+        const thisMonth = now.toISOString().slice(0,7);  // "2026-05"
+        // Calculate pipeline metrics
+        const totalCasesEstimate = records.reduce((s,r)=>s+(Number(r.casesPerMonth)||0),0);
+        const totalPipelineValue = totalCasesEstimate * COMMISSION_PER_CASE;
+        const activeAccounts = records.filter(r => ["s4","s5","s6","s7","s8"].includes(r.stage));
+        const activeCasesEstimate = activeAccounts.reduce((s,r)=>s+(Number(r.casesPerMonth)||0),0);
+        const activeIncome = activeCasesEstimate * COMMISSION_PER_CASE;
+        
+        // This month's activities
+        const allActivities = [];
+        records.forEach(r => {
+          (r.activityLog||[]).forEach(a => allActivities.push({...a, recordName:r.name, recordId:r.id, recordStage:r.stage}));
+        });
+        const thisMonthActivities = allActivities.filter(a => (a.date||"").startsWith(thisMonth));
+        const ordersThisMonth = thisMonthActivities.filter(a => a.type === "Order placed");
+        
+        // Follow-ups due (today or earlier)
+        const todayStr = today();
+        const followUpsDue = [];
+        records.forEach(r => {
+          if (r.nextFollowUp && r.nextFollowUp <= todayStr) {
+            followUpsDue.push({name:r.name, id:r.id, date:r.nextFollowUp, stage:r.stage});
+          }
+          (r.activityLog||[]).forEach(a => {
+            if (a.followupDate && a.followupDate <= todayStr) {
+              const exists = followUpsDue.find(f => f.id === r.id);
+              if (!exists) followUpsDue.push({name:r.name, id:r.id, date:a.followupDate, stage:r.stage, note:a.note});
+            }
+          });
+        });
+        followUpsDue.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+        
+        // Recent activity feed
+        const recentActivity = allActivities.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,8);
+        
+        // Top opportunities — accounts NOT in s8 with high cases/mo estimate
+        const topOpps = records
+          .filter(r => r.stage !== "s8" && (Number(r.casesPerMonth)||0) > 0)
+          .sort((a,b)=>(Number(b.casesPerMonth)||0) - (Number(a.casesPerMonth)||0))
+          .slice(0,5);
+        
+        // Goal progress
+        const goalProgress = monthlyGoal > 0 ? Math.min(100, (activeCasesEstimate / monthlyGoal) * 100) : 0;
+        const isOnTrack = activeCasesEstimate >= monthlyGoal;
+        
+        // Stages with counts and values
+        const stageData = STAGES.map(s => {
+          const inStage = records.filter(r => r.stage === s.id);
+          const cases = inStage.reduce((sum,r) => sum + (Number(r.casesPerMonth)||0), 0);
+          return {...s, count:inStage.length, cases, value: cases * COMMISSION_PER_CASE};
+        });
+        const maxStageCount = Math.max(...stageData.map(s => s.count), 1);
+        
+        return (<>
+          {/* Goal Tracker */}
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"20px 24px",marginBottom:20}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
+              <div>
+                <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Monthly Case Pipeline Goal</p>
+                <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:28,fontWeight:700,color:isOnTrack?"var(--green)":"var(--navy)"}}>
+                  {activeCasesEstimate} <span style={{fontSize:18,color:"var(--text-dim)"}}>/ {monthlyGoal} cases</span>
+                </p>
+                <p style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
+                  {isOnTrack ? "🎯 On track to hit goal" : `${monthlyGoal - activeCasesEstimate} cases away from goal`} · ${activeIncome.toLocaleString()}/mo potential
+                </p>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <label className="fl" style={{margin:0}}>Goal:</label>
+                <input type="number" min="0" value={monthlyGoal} onChange={e=>saveMonthlyGoal(parseInt(e.target.value)||0)} 
+                  style={{width:80,padding:"6px 8px",border:"1px solid var(--border)",fontFamily:"DM Mono,monospace",fontSize:12,textAlign:"center"}}/>
+              </div>
+            </div>
+            <div style={{background:"var(--bg2)",height:10,borderRadius:5,overflow:"hidden"}}>
+              <div style={{height:"100%",background:isOnTrack?"var(--green)":"var(--navy)",width:goalProgress+"%",transition:"width 0.3s"}}/>
+            </div>
+            <p style={{fontSize:10,color:"var(--text-dim)",marginTop:6,textAlign:"right"}}>{Math.round(goalProgress)}% to goal</p>
+          </div>
+
+          {/* KPI Row */}
+          <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+            <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Total Pipeline</p>
+              <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>${totalPipelineValue.toLocaleString()}<span style={{fontSize:12,color:"var(--text-dim)"}}>/mo</span></p>
+              <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{totalCasesEstimate} cases est.</p>
+            </div>
+            <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Active Accounts</p>
+              <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--green)"}}>{activeAccounts.length}</p>
+              <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>Stages 4–8</p>
+            </div>
+            <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Activities</p>
+              <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--navy)"}}>{thisMonthActivities.length}</p>
+              <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
+            </div>
+            <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Orders Logged</p>
+              <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>{ordersThisMonth.length}</p>
+              <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
+            </div>
+          </div>
+
+          {/* Follow-ups due */}
+          {followUpsDue.length > 0 && (
+            <div style={{background:"var(--warn-bg)",border:"1px solid var(--warn)",borderLeft:"4px solid var(--warn)",padding:"14px 18px",marginBottom:20}}>
+              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--gold-dark)",textTransform:"uppercase",marginBottom:8,fontWeight:600}}>📅 {followUpsDue.length} Follow-up{followUpsDue.length===1?"":"s"} Due</p>
+              {followUpsDue.slice(0,5).map(f => (
+                <div key={f.id} onClick={()=>{const rec=records.find(r=>r.id===f.id);if(rec){setForm(rec);setView("edit");}}} 
+                  style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid rgba(168,137,63,0.2)",cursor:"pointer"}}>
+                  <div>
+                    <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{f.name}</p>
+                    {f.note && <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{f.note.slice(0,80)}{f.note.length>80?"...":""}</p>}
+                  </div>
+                  <span style={{fontFamily:"DM Mono,monospace",fontSize:11,color:"var(--gold-dark)",fontWeight:600,whiteSpace:"nowrap",marginLeft:10}}>{f.date}</span>
+                </div>
+              ))}
+              {followUpsDue.length > 5 && <p style={{fontSize:10,color:"var(--text-dim)",marginTop:8,fontStyle:"italic"}}>+ {followUpsDue.length - 5} more</p>}
+            </div>
+          )}
+
+          {/* Pipeline Funnel */}
+          <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Pipeline Funnel</p>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+            {stageData.map(s => (
+              <div key={s.id} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                    <div style={{width:10,height:10,background:s.color,borderRadius:"50%",flexShrink:0}}/>
+                    <span style={{fontFamily:"DM Mono,monospace",fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text-mid)"}}>{s.name}</span>
+                  </div>
+                  <div style={{display:"flex",gap:14,fontSize:11,color:"var(--text-dim)",fontFamily:"DM Mono,monospace",flexShrink:0}}>
+                    <span><b style={{color:"var(--text)"}}>{s.count}</b> records</span>
+                    {s.cases > 0 && <span><b style={{color:"var(--gold-dark)"}}>{s.cases}</b> cs/mo</span>}
+                  </div>
+                </div>
+                <div style={{background:"var(--bg2)",height:6,borderRadius:3,overflow:"hidden"}}>
+                  <div style={{height:"100%",background:s.color,width:((s.count/maxStageCount)*100)+"%",transition:"width 0.3s"}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Two-column layout for Top Opps and Recent Activity */}
+          <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
+            {/* Top Opportunities */}
+            <div style={{flex:"1 1 300px"}}>
+              <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Opportunities</p>
+              <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px"}}>
+                {topOpps.length === 0 && <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No accounts with cases/mo estimates yet. Add estimates to pending accounts to see opportunities.</p>}
+                {topOpps.map((r,i) => (
+                  <div key={r.id} onClick={()=>{setForm(r);setView("edit");}} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none",cursor:"pointer"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{r.name}</p>
+                      <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{stageName(r.stage)} · {r.type}</p>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0,marginLeft:10}}>
+                      <p style={{fontFamily:"DM Mono,monospace",fontSize:13,fontWeight:600,color:"var(--gold-dark)"}}>{r.casesPerMonth} cs/mo</p>
+                      <p style={{fontSize:10,color:"var(--text-dim)"}}>${(r.casesPerMonth*COMMISSION_PER_CASE).toLocaleString()}/mo</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div style={{flex:"1 1 300px"}}>
+              <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Recent Activity</p>
+              <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px"}}>
+                {recentActivity.length === 0 && <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No activity logged yet.</p>}
+                {recentActivity.map((a,i) => (
+                  <div key={i} onClick={()=>{const rec=records.find(r=>r.id===a.recordId);if(rec){setForm(rec);setView("edit");}}} 
+                    style={{padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none",cursor:"pointer"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{a.recordName}</p>
+                      <span style={{fontSize:10,color:"var(--text-dim)",fontFamily:"DM Mono,monospace"}}>{a.date}</span>
+                    </div>
+                    <p style={{fontSize:10,color:"var(--navy)",letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:600,marginBottom:3}}>{a.type}</p>
+                    <p style={{fontSize:11,color:"var(--text-mid)",lineHeight:1.4}}>{a.note}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>);
+      })()}
       {tab==="reports" && <p style={{padding:40,textAlign:"center",color:"var(--text-dim)"}}>Reports coming in Pass 4 — charts, breakdowns</p>}
     </div>
- 
+
     {showSettings && <div style={{position:"fixed",inset:0,background:"rgba(10,36,71,0.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setShowSettings(false)}>
       <div style={{background:"var(--surface)",maxWidth:520,width:"100%",padding:24,border:"1px solid var(--border)"}} onClick={e=>e.stopPropagation()}>
         <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:24,fontWeight:700,color:"var(--navy)",marginBottom:6}}>Cloud Sync</p>
@@ -650,12 +862,12 @@ function DiosAzulCRM() {
         {syncStatus && <p style={{fontSize:11,color:"var(--navy)",marginTop:12}}>{syncStatus}</p>}
       </div>
     </div>}
- 
+
     {syncStatus && !showSettings && <div style={{position:"fixed",bottom:60,right:20,background:"var(--navy)",color:"#fff",padding:"10px 16px",fontFamily:"DM Mono,monospace",fontSize:11,zIndex:9999}}>{syncStatus}</div>}
     <div className={"save-toast"+(saveToast?" show":"")}>&#10003; SAVED</div>
   </div>);
 }
- 
+
 ReactDOM.createRoot(document.getElementById("root")).render(<DiosAzulCRM/>);
 </script>
 </body>
