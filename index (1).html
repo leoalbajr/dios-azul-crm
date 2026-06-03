@@ -354,11 +354,18 @@ function DiosAzulCRM() {
     if (!silent) setSyncStatus("Pushing to cloud...");
     try {
       await fetch(syncUrl, { method:"POST", body: JSON.stringify({ accounts, leads, invoices }), headers:{"Content-Type":"text/plain;charset=utf-8"} });
+      dirtyRef.current = false;
       if (!silent) { setSyncStatus("Pushed at " + new Date().toLocaleTimeString()); setTimeout(()=>setSyncStatus(""), 3000); }
-    } catch (err) { if (!silent) setSyncStatus("Push failed: " + err.message); }
+    } catch (err) { if (!silent) setSyncStatus("Push failed: " + err.message); throw err; }
   };
-  const cloudPull = async () => {
+  const cloudPull = async (force) => {
     if (!syncUrl) { setSyncStatus("Set sync URL in Settings first"); return; }
+    if (dirtyRef.current && !force) {
+      setSyncStatus("Skipped pull — unsaved local changes (pushing first)");
+      try { await cloudPush(true); } catch (e) {}
+      setTimeout(() => setSyncStatus(""), 2000);
+      return;
+    }
     setSyncStatus("Pulling from cloud...");
     try {
       const res = await fetch(syncUrl + "?type=all&_=" + Date.now());
@@ -370,15 +377,26 @@ function DiosAzulCRM() {
       setSyncStatus("Pulled at " + new Date().toLocaleTimeString()); setTimeout(()=>setSyncStatus(""), 3000);
     } catch (err) { setSyncStatus("Pull failed: " + err.message); }
   };
+  const dirtyRef = useRef(false);
+  const firstRenderRef = useRef(true);
   useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    dirtyRef.current = true;
     if (!autoSync || !syncUrl) return;
     if (pushTimer.current) clearTimeout(pushTimer.current);
-    pushTimer.current = setTimeout(() => cloudPush(true), 2000);
+    pushTimer.current = setTimeout(() => {
+      cloudPush(true).then(() => { dirtyRef.current = false; }).catch(() => {});
+    }, 300);
     return () => { if (pushTimer.current) clearTimeout(pushTimer.current); };
   }, [accounts, leads, invoices, autoSync, syncUrl]);
   const toggleAutoSync = () => { const n = !autoSync; setAutoSync(n); try { localStorage.setItem("da_auto_sync", n?"1":"0"); } catch {} };
   // Auto-pull once on load if sync configured
-  useEffect(() => { if (syncUrl) cloudPull(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { 
+    // Auto-pull on load — but only if there's no pending local edit waiting to push.
+    // This prevents stale cloud data from overwriting unpushed local changes.
+    if (syncUrl && !dirtyRef.current) cloudPull(); 
+    /* eslint-disable-next-line */ 
+  }, []);
 
   const switchTab = t => { setTab(t); setView("list"); setSearch(""); setFilterType("All"); setInvSearch(""); setSelectMode(false); setSelectedIds(new Set()); };
   const fmt = n => "$" + (Number(n)||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -527,7 +545,7 @@ function DiosAzulCRM() {
       <button className={"tab"+(tab==="reports"?" active":"")} onClick={()=>switchTab("reports")}>Reports</button>
       <button className="tab" style={{marginLeft:"auto"}} onClick={()=>setShowSettings(true)}><span className={"sync-dot "+(autoSync&&syncUrl?"on":"off")}></span>Sync</button>
       <button className="tab" style={{color:"var(--gold-dark)"}} title="Push" onClick={()=>cloudPush(false)}>&uarr;</button>
-      <button className="tab" style={{color:"var(--gold-dark)"}} title="Pull" onClick={cloudPull}>&darr;</button>
+      <button className="tab" style={{color:"var(--gold-dark)"}} title="Pull" onClick={()=>cloudPull(true)}>&darr;</button>
     </div>
 
     <div className="content">
@@ -579,7 +597,7 @@ function DiosAzulCRM() {
         <p style={{fontSize:11,color:"var(--text-dim)",marginBottom:18}}>Syncs across all devices via Google Sheets.</p>
         <div style={{marginBottom:18}}><label className="fl">Apps Script Web App URL</label><input className="fi" value={syncUrl} onChange={e=>saveSyncUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec"/></div>
         <div style={{marginBottom:18,padding:"12px 14px",background:"var(--navy-light)",border:"1px solid var(--border)"}}><label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:11}}><input type="checkbox" checked={autoSync} onChange={toggleAutoSync}/><span><b>Auto-sync</b> &mdash; push changes automatically</span></label></div>
-        <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}><button className="btn-primary" onClick={()=>cloudPush(false)}>Push Now</button><button className="btn-primary" style={{background:"var(--gold-dark)"}} onClick={cloudPull}>Pull Now</button><button className="btn-secondary" onClick={()=>setShowSettings(false)}>Close</button></div>
+        <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}><button className="btn-primary" onClick={()=>cloudPush(false)}>Push Now</button><button className="btn-primary" style={{background:"var(--gold-dark)"}} onClick={()=>cloudPull(true)}>Pull Now</button><button className="btn-secondary" onClick={()=>setShowSettings(false)}>Close</button></div>
         {syncStatus && <p style={{fontSize:11,color:"var(--navy)",marginTop:8}}>{syncStatus}</p>}
       </div>
     </div>}
