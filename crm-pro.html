@@ -438,7 +438,12 @@ function DiosAzulCRM() {
     pushTimer.current = setTimeout(() => { cloudPush(true).then(()=>{ dirtyRef.current = false; }).catch(()=>{}); }, 300);
     return () => { if (pushTimer.current) clearTimeout(pushTimer.current); };
   }, [records, autoSync, syncUrl]);
-  useEffect(() => { if (syncUrl && !dirtyRef.current) cloudPull(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { 
+    // Skip auto-pull if there's a ?add= link being processed (we don't want to overwrite local with stale cloud)
+    const hasAddParam = window.location.search.includes("add=");
+    if (syncUrl && !dirtyRef.current && !hasAddParam) cloudPull(); 
+    /* eslint-disable-next-line */ 
+  }, []);
   
   // One-tap add from URL (Claude-generated links)
   useEffect(() => {
@@ -452,8 +457,21 @@ function DiosAzulCRM() {
   
   const acceptPending = () => {
     const newRec = {...emptyRecord, ...pendingFromUrl, id: Date.now(), createdAt: today(), stageEntered: today(), activityLog: pendingFromUrl.activityLog || []};
-    persist([...records, newRec]);
+    dirtyRef.current = true;  // Mark dirty BEFORE persist so any pending pull will skip
+    const updated = [...records, newRec];
+    persist(updated);
     setPendingFromUrl(null);
+    // Push immediately without waiting for the 300ms debounce
+    if (syncUrl) {
+      // Push the new state directly (don't rely on stale state in cloudPush closure)
+      try {
+        fetch(syncUrl, {
+          method: "POST",
+          body: JSON.stringify({ records: updated }),
+          headers: { "Content-Type": "text/plain;charset=utf-8" }
+        }).then(() => { dirtyRef.current = false; }).catch(()=>{});
+      } catch (e) {}
+    }
   };
   const editPending = () => {
     setForm({...emptyRecord, ...pendingFromUrl, id: null, createdAt: today(), stageEntered: today(), activityLog: pendingFromUrl.activityLog || []});
