@@ -132,7 +132,7 @@ const STAGES = [
   {id:"s8", name:"Continued Support",     color:"var(--s8)", desc:"Active account, ongoing relationship"},
 ];
 
-const ACTIVITY_TYPES = ["Visit","Call","Email","Sample dropped","Sampling","Activation","Order placed","Follow-up"];
+const ACTIVITY_TYPES = ["Visit","Call","Email","Sample dropped","Sampling","Activation","Inventory Update","Order placed","Follow-up"];
 const PRODUCTS = ["Plata","Reposado","A\u00f1ejo","Extra A\u00f1ejo"];
 // Parse URL for ?add= parameter (one-tap add link from Claude)
 function getAddFromUrl() {
@@ -373,6 +373,9 @@ function DiosAzulCRM() {
   const [bottlesSold, setBottlesSold] = useState({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
   const [peopleSampled, setPeopleSampled] = useState(0);
   const [drinksServed, setDrinksServed] = useState(0);
+  // Inventory Update fields
+  const [invNew, setInvNew] = useState({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
+  const [invDelivered, setInvDelivered] = useState({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
   const [saveToast, setSaveToast] = useState(false);
   const [syncUrl, setSyncUrl] = useState(() => { try { return localStorage.getItem("da_sync_url") || ""; } catch { return ""; } });
   const [syncStatus, setSyncStatus] = useState("");
@@ -557,7 +560,7 @@ function DiosAzulCRM() {
       persist(records.map(r => r.id===u.id ? u : r));
     };
     const addActivity = () => {
-      const isStructured = activityType === "Sampling" || activityType === "Activation";
+      const isStructured = activityType === "Sampling" || activityType === "Activation" || activityType === "Inventory Update";
       if (!isStructured && !activityNote.trim()) return;
       const log = Array.isArray(form.activityLog) ? form.activityLog : [];
       const entry = {
@@ -589,9 +592,41 @@ function DiosAzulCRM() {
         if (activityType === "Activation") {
           if (drinksServed > 0) entry.drinksServed = Number(drinksServed);
         }
+        if (activityType === "Inventory Update") {
+          // Store the new inventory snapshot
+          const snap = {};
+          PRODUCTS.forEach(p => { snap[p] = Number(invNew[p])||0; });
+          entry.newInventory = snap;
+          
+          // Find previous inventory snapshot
+          const log = Array.isArray(form.activityLog) ? form.activityLog : [];
+          const lastInvEntry = log.find(a => a.type === "Inventory Update" && a.newInventory);
+          const lastInv = lastInvEntry ? lastInvEntry.newInventory : (form.inventory || {});
+          
+          // Track delivered + calculated sold
+          const delivered = {};
+          const sold = {};
+          let anyDelivered = false;
+          let anySold = false;
+          PRODUCTS.forEach(p => {
+            const d = Number(invDelivered[p])||0;
+            if (d > 0) { delivered[p] = d; anyDelivered = true; }
+            const prev = Number(lastInv[p])||0;
+            const now = Number(snap[p])||0;
+            const s = Math.max(0, prev - now + d);
+            if (s > 0) { sold[p] = s; anySold = true; }
+          });
+          if (anyDelivered) entry.delivered = delivered;
+          if (anySold) entry.bottlesSoldCalc = sold;
+        }
       }
       let updated = {...form, activityLog: [entry, ...log]};
       if (followupDate) updated.nextFollowUp = followupDate;
+      
+      // Auto-update account inventory when Inventory Update is logged
+      if (activityType === "Inventory Update" && entry.newInventory) {
+        updated = {...updated, inventory: {...entry.newInventory}};
+      }
       
       // Auto-deduct inventory + add to salesLog when Sampling has bottles sold
       if (activityType === "Sampling" && entry.bottlesSold) {
@@ -620,6 +655,8 @@ function DiosAzulCRM() {
       setEventEndTime("");
       setEventProducts([]);
       setEventStaff("");
+      setInvNew({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
+      setInvDelivered({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
       setBottlesSold({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
       setPeopleSampled(0);
       setDrinksServed(0);
@@ -720,7 +757,20 @@ function DiosAzulCRM() {
               </div>
               <div style={{flex:"1 1 180px"}}>
                 <label className="fl">Type</label>
-                <select className="fs" value={activityType} onChange={e=>setActivityType(e.target.value)}>
+                <select className="fs" value={activityType} onChange={e=>{
+                  const t = e.target.value;
+                  setActivityType(t);
+                  if (t === "Inventory Update") {
+                    const cur = form.inventory || {};
+                    setInvNew({
+                      Plata: Number(cur.Plata)||0,
+                      Reposado: Number(cur.Reposado)||0,
+                      "A\u00f1ejo": Number(cur["A\u00f1ejo"])||0,
+                      "Extra A\u00f1ejo": Number(cur["Extra A\u00f1ejo"])||0
+                    });
+                    setInvDelivered({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
+                  }
+                }}>
                   {ACTIVITY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
@@ -798,6 +848,80 @@ function DiosAzulCRM() {
               </>}
             </>}
             
+            {/* Inventory Update structured fields */}
+            {activityType === "Inventory Update" && (() => {
+              // Find the last inventory snapshot
+              const lastInvEntry = (form.activityLog||[]).find(a => a.type === "Inventory Update" && a.newInventory);
+              const lastInv = lastInvEntry ? lastInvEntry.newInventory : (form.inventory || {});
+              const lastDate = lastInvEntry ? lastInvEntry.date : null;
+              
+              return (
+                <>
+                  {lastInvEntry && (
+                    <div style={{background:"var(--bg2)",padding:"10px 12px",marginBottom:10,fontSize:10,color:"var(--text-mid)"}}>
+                      <p style={{fontWeight:600,marginBottom:4,letterSpacing:"0.06em",textTransform:"uppercase",fontSize:9,color:"var(--text-dim)"}}>Last Update — {lastDate}</p>
+                      {PRODUCTS.map(p => (
+                        <span key={p} style={{marginRight:14,fontFamily:"DM Mono,monospace"}}>
+                          <b style={{color:"var(--navy)"}}>{p}:</b> {Number(lastInv[p])||0}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div style={{marginBottom:10}}>
+                    <label className="fl">Current Inventory (what you see now)</label>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {PRODUCTS.map(p => (
+                        <div key={p} style={{flex:"1 1 130px"}}>
+                          <p style={{fontSize:9,color:"var(--text-dim)",marginBottom:3,letterSpacing:"0.06em",textTransform:"uppercase"}}>{p}</p>
+                          <input className="fi" type="number" min="0" value={invNew[p]||0}
+                            onChange={e=>setInvNew({...invNew,[p]:Number(e.target.value)||0})}/>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <details style={{marginBottom:10,fontSize:10}}>
+                    <summary style={{cursor:"pointer",color:"var(--navy)",fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase"}}>+ Account received delivery since last visit?</summary>
+                    <p style={{fontSize:10,color:"var(--text-dim)",marginTop:6,marginBottom:6}}>Add bottles delivered between visits for accurate sold-calc.</p>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {PRODUCTS.map(p => (
+                        <div key={p} style={{flex:"1 1 130px"}}>
+                          <p style={{fontSize:9,color:"var(--text-dim)",marginBottom:3,letterSpacing:"0.06em",textTransform:"uppercase"}}>{p} delivered</p>
+                          <input className="fi" type="number" min="0" value={invDelivered[p]||0}
+                            onChange={e=>setInvDelivered({...invDelivered,[p]:Number(e.target.value)||0})}/>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                  
+                  {/* Show calculated bottles sold preview */}
+                  {(() => {
+                    const sold = {};
+                    let anyData = false;
+                    PRODUCTS.forEach(p => {
+                      const prev = Number(lastInv[p])||0;
+                      const now = Number(invNew[p])||0;
+                      const delivered = Number(invDelivered[p])||0;
+                      const s = Math.max(0, prev - now + delivered);
+                      if (s > 0) { sold[p] = s; anyData = true; }
+                    });
+                    if (!anyData) return null;
+                    return (
+                      <div style={{background:"var(--green-bg)",padding:"10px 12px",marginBottom:10,fontSize:11,color:"var(--green)",border:"1px solid var(--green)"}}>
+                        <p style={{fontWeight:600,marginBottom:4,letterSpacing:"0.06em",textTransform:"uppercase",fontSize:9}}>Estimated Bottles Sold Since Last Visit</p>
+                        {Object.entries(sold).map(([p,n]) => (
+                          <span key={p} style={{marginRight:14,fontFamily:"DM Mono,monospace",fontWeight:600}}>
+                            {p}: {n}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </>
+              );
+            })()}
+            
             <div style={{marginBottom:10}}>
               <label className="fl">Note</label>
               <textarea className="fta" placeholder={`What happened?`} value={activityNote} onChange={e=>setActivityNote(e.target.value)} style={{minHeight:60}}/>
@@ -837,6 +961,21 @@ function DiosAzulCRM() {
                   const items = Object.entries(a.bottlesSold).filter(([_,n])=>n>0);
                   const total = items.reduce((s,[_,n])=>s+n,0);
                   return <p style={{fontSize:10,color:"var(--gold-dark)",marginTop:4,fontWeight:600}}>📦 Sold {total} bottles: {items.map(([p,n])=>`${p} ${n}`).join(", ")}</p>;
+                })()}
+                {a.newInventory && (() => {
+                  const items = Object.entries(a.newInventory).filter(([_,n])=>Number(n)>=0);
+                  return <p style={{fontSize:10,color:"var(--navy)",marginTop:4,fontWeight:600}}>📋 Inventory: {items.map(([p,n])=>`${p} ${n}`).join(", ")}</p>;
+                })()}
+                {a.delivered && (() => {
+                  const items = Object.entries(a.delivered).filter(([_,n])=>Number(n)>0);
+                  if (items.length === 0) return null;
+                  return <p style={{fontSize:10,color:"var(--text-mid)",marginTop:4}}>🚚 Delivered: {items.map(([p,n])=>`${p} ${n}`).join(", ")}</p>;
+                })()}
+                {a.bottlesSoldCalc && (() => {
+                  const items = Object.entries(a.bottlesSoldCalc).filter(([_,n])=>Number(n)>0);
+                  if (items.length === 0) return null;
+                  const total = items.reduce((s,[_,n])=>s+Number(n),0);
+                  return <p style={{fontSize:10,color:"var(--green)",marginTop:4,fontWeight:600}}>💰 Sold since last visit: {total} ({items.map(([p,n])=>`${p} ${n}`).join(", ")})</p>;
                 })()}
                 {a.peopleSampled && <p style={{fontSize:10,color:"var(--text-mid)",marginTop:4}}>👥 {a.peopleSampled} people sampled</p>}
                 {a.drinksServed && <p style={{fontSize:10,color:"var(--green)",marginTop:4,fontWeight:600}}>🍹 {a.drinksServed} drinks served</p>}
