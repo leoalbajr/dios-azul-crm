@@ -375,6 +375,7 @@ function DiosAzulCRM() {
   const [eventStartTime, setEventStartTime] = useState("");
   const [eventEndTime, setEventEndTime] = useState("");
   const [eventProducts, setEventProducts] = useState([]);
+  const [eventStaff, setEventStaff] = useState("");
   const [bottlesSold, setBottlesSold] = useState({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
   const [peopleSampled, setPeopleSampled] = useState(0);
   const [drinksServed, setDrinksServed] = useState(0);
@@ -569,6 +570,7 @@ function DiosAzulCRM() {
           if (mins > 0) entry.totalHours = (mins/60).toFixed(1);
         }
         if (eventProducts.length > 0) entry.products = eventProducts;
+        if (eventStaff.trim()) entry.staff = eventStaff.trim();
         if (activityType === "Sampling") {
           const sold = {};
           let totalSold = 0;
@@ -593,6 +595,7 @@ function DiosAzulCRM() {
       setEventStartTime("");
       setEventEndTime("");
       setEventProducts([]);
+      setEventStaff("");
       setBottlesSold({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
       setPeopleSampled(0);
       setDrinksServed(0);
@@ -751,6 +754,11 @@ function DiosAzulCRM() {
               </div>
               
               <div style={{marginBottom:10}}>
+                <label className="fl">{activityType === "Sampling" ? "Sampler / Staff Doing the Event" : "Rep / Staff Doing the Activation"}</label>
+                <input className="fi" placeholder="e.g. Leo, Sarah, Marcus..." value={eventStaff} onChange={e=>setEventStaff(e.target.value)}/>
+              </div>
+              
+              <div style={{marginBottom:10}}>
                 <label className="fl">{activityType === "Sampling" ? "Products Sampled" : "Products Poured"}</label>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:2}}>
                   {PRODUCTS.map(p => {
@@ -818,6 +826,7 @@ function DiosAzulCRM() {
                   <span className="activity-date">{a.date}{a.totalHours && " · " + a.totalHours + "h"}</span>
                 </div>
                 {a.note && <p className="activity-note">{a.note}</p>}
+                {a.staff && <p style={{fontSize:10,color:"var(--text-mid)",marginTop:4,fontStyle:"italic"}}>👤 {a.staff}</p>}
                 {a.products && a.products.length > 0 && <p style={{fontSize:10,color:"var(--navy)",marginTop:4,fontWeight:600}}>🥃 {a.products.join(", ")}</p>}
                 {a.bottlesSold && (() => {
                   const items = Object.entries(a.bottlesSold).filter(([_,n])=>n>0);
@@ -1074,7 +1083,14 @@ function DiosAzulCRM() {
               if (a.severity !== b.severity) return a.severity === "empty" ? -1 : 1;
               return a.inv - b.inv;
             });
-            if (lowStock.length === 0) return null;
+            if (lowStock.length === 0) {
+              return (
+                <div style={{background:"var(--surface)",border:"1px dashed var(--border-mid)",padding:"14px 18px",marginBottom:20}}>
+                  <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4,fontWeight:600}}>Inventory Status</p>
+                  <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No low-stock alerts. Set inventory amounts on your active accounts to see warnings here when stock gets low.</p>
+                </div>
+              );
+            }
             return (
               <div style={{background:"#fef2f2",border:"1px solid #c0392b",borderLeft:"4px solid #c0392b",padding:"14px 18px",marginBottom:20}}>
                 <p style={{fontSize:9,letterSpacing:"0.12em",color:"#c0392b",textTransform:"uppercase",marginBottom:8,fontWeight:600}}>⚠ {lowStock.length} Low/Empty Inventory Alert{lowStock.length===1?"":"s"}</p>
@@ -1297,7 +1313,8 @@ function DiosAzulCRM() {
             const totalPeople = samplings.reduce((s,a) => s + (Number(a.peopleSampled)||0), 0);
             const monthPeople = thisMonthSamplings.reduce((s,a) => s + (Number(a.peopleSampled)||0), 0);
             
-            if (samplings.length === 0 && activations.length === 0) return null;
+            // Show placeholder if no data yet
+            const hasData = samplings.length > 0 || activations.length > 0;
             
             // Top sampling venues by bottles sold
             const venueMap = {};
@@ -1312,7 +1329,10 @@ function DiosAzulCRM() {
             
             return <>
               <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Event Impact</p>
-              <div style={{display:"flex",gap:12,marginBottom:14,flexWrap:"wrap"}}>
+              {!hasData && <div style={{background:"var(--surface)",border:"1px dashed var(--border-mid)",padding:"20px",marginBottom:20,textAlign:"center"}}>
+                <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No sampling or activation events logged yet. Log a Sampling or Activation activity on any account to see metrics here.</p>
+              </div>}
+              {hasData && <div style={{display:"flex",gap:12,marginBottom:14,flexWrap:"wrap"}}>
                 <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
                   <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Samplings</p>
                   <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>{samplings.length}</p>
@@ -1338,9 +1358,9 @@ function DiosAzulCRM() {
                   <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--green)"}}>{totalDrinks}</p>
                   <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{monthDrinks} this month</p>
                 </div>
-              </div>
+              </div>}
               
-              {topVenues.length > 0 && <>
+              {hasData && topVenues.length > 0 && <>
                 <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Sampling Venues (by Bottles Sold)</p>
                 <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
                   {topVenues.map(([name,d],i) => (
