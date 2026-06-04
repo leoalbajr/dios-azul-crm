@@ -351,8 +351,54 @@ const emptyRecord = {
   casesPerMonth: 0, products:"", source:"", notes:"",
   stageEntered: today(), createdAt: today(), activityLog: [],
   inventory: {Plata:0, Reposado:0, "A\u00f1ejo":0, "Extra A\u00f1ejo":0},
-  reorderThreshold: {Plata:DEFAULT_REORDER_THRESHOLD, Reposado:DEFAULT_REORDER_THRESHOLD, "A\u00f1ejo":DEFAULT_REORDER_THRESHOLD, "Extra A\u00f1ejo":DEFAULT_REORDER_THRESHOLD}
+  reorderThreshold: {Plata:DEFAULT_REORDER_THRESHOLD, Reposado:DEFAULT_REORDER_THRESHOLD, "A\u00f1ejo":DEFAULT_REORDER_THRESHOLD, "Extra A\u00f1ejo":DEFAULT_REORDER_THRESHOLD},
+  bottlesGoal: {Plata:0, Reposado:0, "A\u00f1ejo":0, "Extra A\u00f1ejo":0},
+  salesLog: []
 };
+
+function ManualSalesLog({ form, setForm, persist, records, view }) {
+  const [selectedProduct, setSelectedProduct] = React.useState("Plata");
+  const [qty, setQty] = React.useState(1);
+  const [logDate, setLogDate] = React.useState(today());
+  const [note, setNote] = React.useState("");
+  
+  const submit = () => {
+    if (qty <= 0) return;
+    const newEntry = { date: logDate, product: selectedProduct, qty: Number(qty), source: "manual", note: note.trim() || "" };
+    const newLog = [newEntry, ...(form.salesLog || [])];
+    // Deduct from inventory
+    const newInv = { ...(form.inventory || {}) };
+    newInv[selectedProduct] = Math.max(0, (Number(newInv[selectedProduct]) || 0) - Number(qty));
+    const updated = { ...form, salesLog: newLog, inventory: newInv };
+    setForm(updated);
+    if (view === "edit") persist(records.map(r => r.id === updated.id ? updated : r));
+    setQty(1);
+    setNote("");
+  };
+  
+  return (
+    <div style={{marginTop:10,background:"var(--surface)",padding:10,border:"1px solid var(--border)"}}>
+      <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 100px"}}>
+          <p style={{fontSize:9,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Date</p>
+          <input className="fi" type="date" value={logDate} onChange={e=>setLogDate(e.target.value)}/>
+        </div>
+        <div style={{flex:"1 1 100px"}}>
+          <p style={{fontSize:9,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Product</p>
+          <select className="fs" value={selectedProduct} onChange={e=>setSelectedProduct(e.target.value)}>
+            {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div style={{flex:"1 1 70px"}}>
+          <p style={{fontSize:9,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Qty</p>
+          <input className="fi" type="number" min="1" value={qty} onChange={e=>setQty(Number(e.target.value)||0)}/>
+        </div>
+      </div>
+      <input className="fi" placeholder="Optional note (e.g. 'saw inventory down 3 since last visit')" value={note} onChange={e=>setNote(e.target.value)} style={{marginBottom:6}}/>
+      <button className="btn-primary" onClick={submit} style={{width:"100%"}}>Log Sale &amp; Update Inventory</button>
+    </div>
+  );
+}
 
 function DiosAzulCRM() {
   const [records, setRecords] = useState(() => { 
@@ -384,7 +430,7 @@ function DiosAzulCRM() {
   const [syncStatus, setSyncStatus] = useState("");
   const [autoSync, setAutoSync] = useState(() => { try { return localStorage.getItem("da_auto_sync") === "1"; } catch { return false; } });
   const [showSettings, setShowSettings] = useState(false);
-  const [monthlyGoal, setMonthlyGoal] = useState(() => { try { return parseInt(localStorage.getItem("da_monthly_goal"))||75; } catch { return 75; } });
+  const [monthlyGoal, setMonthlyGoal] = useState(() => { try { return parseInt(localStorage.getItem("da_monthly_goal"))||40; } catch { return 75; } });
   const saveMonthlyGoal = (n) => { setMonthlyGoal(n); try { localStorage.setItem("da_monthly_goal", String(n)); } catch {} };
   const toastTimer = useRef(null);
   const pushTimer = useRef(null);
@@ -584,8 +630,26 @@ function DiosAzulCRM() {
           if (drinksServed > 0) entry.drinksServed = Number(drinksServed);
         }
       }
-      const updated = {...form, activityLog: [entry, ...log]};
+      let updated = {...form, activityLog: [entry, ...log]};
       if (followupDate) updated.nextFollowUp = followupDate;
+      
+      // Auto-deduct inventory + add to salesLog when Sampling has bottles sold
+      if (activityType === "Sampling" && entry.bottlesSold) {
+        const newInv = {...(updated.inventory || {})};
+        const newSalesLog = Array.isArray(updated.salesLog) ? [...updated.salesLog] : [];
+        Object.entries(entry.bottlesSold).forEach(([product, qty]) => {
+          newInv[product] = Math.max(0, (Number(newInv[product])||0) - Number(qty));
+          newSalesLog.unshift({
+            date: entry.date,
+            product: product,
+            qty: Number(qty),
+            source: "sampling",
+            note: "From sampling event"
+          });
+        });
+        updated = {...updated, inventory: newInv, salesLog: newSalesLog};
+      }
+      
       setForm(updated);
       if (view==="edit") persist(records.map(r => r.id===updated.id ? updated : r));
       // Reset
@@ -669,31 +733,84 @@ function DiosAzulCRM() {
             })}
           </div>
         </div></div>
-        {/* Account Inventory Tracker */}
+        {/* Account Inventory & Sales */}
         <div style={{background:"var(--navy-light)",border:"1px solid var(--border)",padding:"14px 16px",marginBottom:14}}>
-          <p className="fl" style={{marginBottom:8}}>Account Inventory (current stock)</p>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {PRODUCTS.map(p => {
-              const inv = (form.inventory && form.inventory[p]) || 0;
-              const threshold = (form.reorderThreshold && form.reorderThreshold[p]) || DEFAULT_REORDER_THRESHOLD;
-              const isLow = inv <= threshold && inv > 0;
-              const isEmpty = inv === 0;
-              return (
-                <div key={p} style={{flex:"1 1 130px"}}>
-                  <p style={{fontSize:9,color:"var(--text-dim)",marginBottom:3,letterSpacing:"0.08em",textTransform:"uppercase"}}>
-                    {p} {isLow && <span style={{color:"var(--warn)",marginLeft:4}}>⚠</span>}{isEmpty && <span style={{color:"#c0392b",marginLeft:4}}>●</span>}
-                  </p>
-                  <input className="fi" type="number" min="0" value={inv} 
-                    onChange={e=>{
-                      const newInv = {...(form.inventory||{}), [p]: Number(e.target.value)||0};
-                      setForm({...form, inventory: newInv});
-                    }}
-                    style={isLow?{borderColor:"var(--warn)",background:"var(--warn-bg)"}:isEmpty?{borderColor:"#c0392b",background:"rgba(192,57,43,0.05)"}:{}}/>
-                </div>
-              );
-            })}
-          </div>
-          <details style={{fontSize:10,color:"var(--text-dim)"}}>
+          <p className="fl" style={{marginBottom:8}}>Inventory & Monthly Sales</p>
+          {(() => {
+            const curMonth = today().slice(0,7);
+            const monthSales = {};
+            PRODUCTS.forEach(p => { monthSales[p] = 0; });
+            (form.salesLog||[]).forEach(s => {
+              if ((s.date||"").startsWith(curMonth) && monthSales[s.product]!==undefined) {
+                monthSales[s.product] += Number(s.qty)||0;
+              }
+            });
+            const totalSold = {};
+            PRODUCTS.forEach(p => { totalSold[p] = 0; });
+            (form.salesLog||[]).forEach(s => {
+              if (totalSold[s.product]!==undefined) totalSold[s.product] += Number(s.qty)||0;
+            });
+            return (
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {PRODUCTS.map(p => {
+                  const inv = (form.inventory && form.inventory[p]) || 0;
+                  const threshold = (form.reorderThreshold && form.reorderThreshold[p]) || DEFAULT_REORDER_THRESHOLD;
+                  const goal = (form.bottlesGoal && form.bottlesGoal[p]) || 0;
+                  const sold = monthSales[p];
+                  const lifetimeSold = totalSold[p];
+                  const isLow = inv <= threshold && inv > 0;
+                  const isEmpty = inv === 0;
+                  const goalPct = goal > 0 ? Math.min(100, (sold/goal)*100) : 0;
+                  return (
+                    <div key={p} style={{flex:"1 1 200px",background:"var(--surface)",padding:"10px 12px",border:"1px solid var(--border)"}}>
+                      <p style={{fontSize:10,fontWeight:600,color:"var(--navy)",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                        {p} {isLow && <span style={{color:"var(--warn)",marginLeft:4}}>⚠</span>}{isEmpty && <span style={{color:"#c0392b",marginLeft:4}}>●</span>}
+                      </p>
+                      <div style={{display:"flex",gap:6,marginBottom:6}}>
+                        <div style={{flex:1}}>
+                          <p style={{fontSize:8,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>In Stock</p>
+                          <input className="fi" type="number" min="0" value={inv} 
+                            onChange={e=>{
+                              const newInv = {...(form.inventory||{}), [p]: Number(e.target.value)||0};
+                              setForm({...form, inventory: newInv});
+                            }}
+                            style={isLow?{borderColor:"var(--warn)",background:"var(--warn-bg)"}:isEmpty?{borderColor:"#c0392b",background:"rgba(192,57,43,0.05)"}:{}}/>
+                        </div>
+                        <div style={{flex:1}}>
+                          <p style={{fontSize:8,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Goal/mo</p>
+                          <input className="fi" type="number" min="0" value={goal}
+                            onChange={e=>{
+                              const newG = {...(form.bottlesGoal||{}), [p]: Number(e.target.value)||0};
+                              setForm({...form, bottlesGoal: newG});
+                            }}/>
+                        </div>
+                      </div>
+                      {goal > 0 && (
+                        <div style={{marginBottom:4}}>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--text-dim)",marginBottom:2}}>
+                            <span>This month</span>
+                            <span><b style={{color:"var(--text)"}}>{sold}</b> / {goal}</span>
+                          </div>
+                          <div style={{background:"var(--bg2)",height:4,borderRadius:2,overflow:"hidden"}}>
+                            <div style={{height:"100%",background:sold>=goal?"var(--green)":"var(--navy)",width:goalPct+"%"}}/>
+                          </div>
+                        </div>
+                      )}
+                      <p style={{fontSize:9,color:"var(--text-dim)",marginTop:4}}>Sold all-time: <b style={{color:"var(--gold-dark)"}}>{lifetimeSold}</b></p>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          
+          {/* Manual Log bottles sold */}
+          <details style={{marginTop:12,fontSize:10}}>
+            <summary style={{cursor:"pointer",color:"var(--navy)",fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase"}}>+ Log bottles sold (manual)</summary>
+            <ManualSalesLog form={form} setForm={setForm} persist={persist} records={records} view={view}/>
+          </details>
+          
+          <details style={{fontSize:10,color:"var(--text-dim)",marginTop:8}}>
             <summary style={{cursor:"pointer",letterSpacing:"0.08em",textTransform:"uppercase"}}>Reorder thresholds</summary>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
               {PRODUCTS.map(p => {
@@ -712,6 +829,20 @@ function DiosAzulCRM() {
             </div>
             <p style={{fontSize:10,marginTop:6,color:"var(--text-dim)"}}>Flag fires when stock at or below threshold. Default: 2 bottles.</p>
           </details>
+          
+          {(form.salesLog||[]).length > 0 && (
+            <details style={{fontSize:10,color:"var(--text-dim)",marginTop:8}}>
+              <summary style={{cursor:"pointer",letterSpacing:"0.08em",textTransform:"uppercase"}}>Sales history ({(form.salesLog||[]).length} entries)</summary>
+              <div style={{marginTop:8,maxHeight:200,overflowY:"auto"}}>
+                {(form.salesLog||[]).map((s,i) => (
+                  <div key={i} style={{padding:"6px 8px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",fontSize:10}}>
+                    <span><b style={{color:"var(--navy)"}}>{s.product}</b> · {s.qty} bottle{s.qty===1?"":"s"} {s.source==="sampling" && <span style={{color:"var(--gold-dark)",marginLeft:4}}>(sampling)</span>}</span>
+                    <span style={{color:"var(--text-dim)"}}>{s.date}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
         <div className="fr1"><div><label className="fl">Notes</label><textarea className="fta" {...F("notes")}/></div></div>
         
@@ -1000,29 +1131,35 @@ function DiosAzulCRM() {
         const maxStageCount = Math.max(...stageData.map(s => s.count), 1);
         
         return (<>
-          {/* Goal Tracker */}
-          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"20px 24px",marginBottom:20}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
-              <div>
-                <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Monthly Case Pipeline Goal</p>
-                <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:28,fontWeight:700,color:isOnTrack?"var(--green)":"var(--navy)"}}>
-                  {activeCasesEstimate} <span style={{fontSize:18,color:"var(--text-dim)"}}>/ {monthlyGoal} cases</span>
-                </p>
-                <p style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                  {isOnTrack ? "🎯 On track to hit goal" : `${monthlyGoal - activeCasesEstimate} cases away from goal`} · ${activeIncome.toLocaleString()}/mo potential
-                </p>
+          {/* Field Activity Goal */}
+          {(() => {
+            const actGoalProgress = monthlyGoal > 0 ? Math.min(100, (thisMonthActivities.length / monthlyGoal) * 100) : 0;
+            const actOnTrack = thisMonthActivities.length >= monthlyGoal;
+            return (
+              <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"20px 24px",marginBottom:20}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
+                  <div>
+                    <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Field Activity Goal — This Month</p>
+                    <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:28,fontWeight:700,color:actOnTrack?"var(--green)":"var(--navy)"}}>
+                      {thisMonthActivities.length} <span style={{fontSize:18,color:"var(--text-dim)"}}>/ {monthlyGoal} activities</span>
+                    </p>
+                    <p style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
+                      {actOnTrack ? "🎯 On track" : `${monthlyGoal - thisMonthActivities.length} away`} · Visits, calls, samplings, activations
+                    </p>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <label className="fl" style={{margin:0}}>Target:</label>
+                    <input type="number" min="0" value={monthlyGoal} onChange={e=>saveMonthlyGoal(parseInt(e.target.value)||0)} 
+                      style={{width:80,padding:"6px 8px",border:"1px solid var(--border)",fontFamily:"DM Mono,monospace",fontSize:12,textAlign:"center"}}/>
+                  </div>
+                </div>
+                <div style={{background:"var(--bg2)",height:10,borderRadius:5,overflow:"hidden"}}>
+                  <div style={{height:"100%",background:actOnTrack?"var(--green)":"var(--navy)",width:actGoalProgress+"%",transition:"width 0.3s"}}/>
+                </div>
+                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:6,textAlign:"right"}}>{Math.round(actGoalProgress)}% to target</p>
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <label className="fl" style={{margin:0}}>Goal:</label>
-                <input type="number" min="0" value={monthlyGoal} onChange={e=>saveMonthlyGoal(parseInt(e.target.value)||0)} 
-                  style={{width:80,padding:"6px 8px",border:"1px solid var(--border)",fontFamily:"DM Mono,monospace",fontSize:12,textAlign:"center"}}/>
-              </div>
-            </div>
-            <div style={{background:"var(--bg2)",height:10,borderRadius:5,overflow:"hidden"}}>
-              <div style={{height:"100%",background:isOnTrack?"var(--green)":"var(--navy)",width:goalProgress+"%",transition:"width 0.3s"}}/>
-            </div>
-            <p style={{fontSize:10,color:"var(--text-dim)",marginTop:6,textAlign:"right"}}>{Math.round(goalProgress)}% to goal</p>
-          </div>
+            );
+          })()}
 
           {/* KPI Row */}
           <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
@@ -1133,6 +1270,53 @@ function DiosAzulCRM() {
             ))}
           </div>
 
+          {/* Top Selling Accounts (this month) */}
+          {(() => {
+            const curMonth = today().slice(0,7);
+            const sellers = records.map(r => {
+              const monthBottles = (r.salesLog||[])
+                .filter(s => (s.date||"").startsWith(curMonth))
+                .reduce((sum,s) => sum + (Number(s.qty)||0), 0);
+              return { record:r, bottles: monthBottles };
+            }).filter(x => x.bottles > 0)
+              .sort((a,b) => b.bottles - a.bottles)
+              .slice(0,10);
+            
+            if (sellers.length === 0) {
+              return (
+                <div style={{marginBottom:20}}>
+                  <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Selling Accounts — This Month</p>
+                  <div style={{background:"var(--surface)",border:"1px dashed var(--border-mid)",padding:"20px",textAlign:"center"}}>
+                    <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No bottles logged this month yet. Log sales via Sampling events or the manual logger on each account.</p>
+                  </div>
+                </div>
+              );
+            }
+            const maxBottles = sellers[0].bottles;
+            return (
+              <div style={{marginBottom:20}}>
+                <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Selling Accounts — This Month</p>
+                <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px"}}>
+                  {sellers.map((s,i) => (
+                    <div key={s.record.id} onClick={()=>{setForm(s.record);setView("edit");}} 
+                      style={{padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none",cursor:"pointer"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{s.record.name}</p>
+                          <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{s.record.city||""} {s.record.type ? "· " + s.record.type : ""}</p>
+                        </div>
+                        <p style={{fontFamily:"DM Mono,monospace",fontSize:14,fontWeight:600,color:"var(--green)",marginLeft:10}}>{s.bottles} bottles</p>
+                      </div>
+                      <div style={{background:"var(--bg2)",height:4,borderRadius:2,overflow:"hidden"}}>
+                        <div style={{height:"100%",background:"var(--green)",width:((s.bottles/maxBottles)*100)+"%"}}/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          
           {/* Two-column layout for Top Opps and Recent Activity */}
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
             {/* Top Opportunities */}
