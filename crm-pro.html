@@ -935,178 +935,135 @@ function DiosAzulCRM() {
       </>}
 
       {tab==="dashboard" && (() => {
-        const now = new Date();
-        const thisMonth = now.toISOString().slice(0,7);  // "2026-05"
-        // Calculate pipeline metrics
+        const thisMonth = new Date().toISOString().slice(0,7);
+        const todayStr = today();
         const activeAccounts = records.filter(r => ["s4","s5","s6","s7","s8"].includes(r.stage));
         
-        // This month's activities
         const allActivities = [];
         records.forEach(r => {
-          (r.activityLog||[]).forEach(a => allActivities.push({...a, recordName:r.name, recordId:r.id, recordStage:r.stage}));
+          (r.activityLog||[]).forEach(a => {
+            allActivities.push({...a, recordName:r.name, recordId:r.id, recordStage:r.stage});
+          });
         });
         const thisMonthActivities = allActivities.filter(a => (a.date||"").startsWith(thisMonth));
         const ordersThisMonth = thisMonthActivities.filter(a => a.type === "Order placed");
         
-        // Follow-ups due (today or earlier)
-        const todayStr = today();
         const followUpsDue = [];
         records.forEach(r => {
-          if (r.nextFollowUp && r.nextFollowUp <= todayStr) {
-            followUpsDue.push({name:r.name, id:r.id, date:r.nextFollowUp, stage:r.stage});
-          }
           (r.activityLog||[]).forEach(a => {
             if (a.followupDate && a.followupDate <= todayStr) {
-              const exists = followUpsDue.find(f => f.id === r.id);
-              if (!exists) followUpsDue.push({name:r.name, id:r.id, date:a.followupDate, stage:r.stage, note:a.note});
+              if (!followUpsDue.find(f => f.id === r.id)) {
+                followUpsDue.push({name:r.name, id:r.id, date:a.followupDate, note:a.note});
+              }
             }
           });
         });
         followUpsDue.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
         
-        // Recent activity feed
         const recentActivity = allActivities.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,8);
         
-
-
-        // Stages with counts
-        const stageData = STAGES.map(s => {
-          const inStage = records.filter(r => r.stage === s.id);
-          return {...s, count:inStage.length};
-        });
+        const stageData = STAGES.map(s => ({...s, count: records.filter(r => r.stage === s.id).length}));
         const maxStageCount = Math.max(...stageData.map(s => s.count), 1);
         
-        return (<>
-
-
-          {/* KPI Row */}
-          <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
-<div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
-              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Active Accounts</p>
-              <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--green)"}}>{activeAccounts.length}</p>
-              <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>Stages 4–8</p>
-            </div>
-            <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
-              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Activities</p>
-              <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--navy)"}}>{thisMonthActivities.length}</p>
-              <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
-            </div>
-            <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
-              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Orders Logged</p>
-              <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>{ordersThisMonth.length}</p>
-              <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
-            </div>
-          </div>
-
-          {/* Follow-ups due */}
-          {followUpsDue.length > 0 && (
-            <div style={{background:"var(--warn-bg)",border:"1px solid var(--warn)",borderLeft:"4px solid var(--warn)",padding:"14px 18px",marginBottom:20}}>
-              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--gold-dark)",textTransform:"uppercase",marginBottom:8,fontWeight:600}}>📅 {followUpsDue.length} Follow-up{followUpsDue.length===1?"":"s"} Due</p>
-              {followUpsDue.slice(0,5).map(f => (
-                <div key={f.id} onClick={()=>{const rec=records.find(r=>r.id===f.id);if(rec){setForm(rec);setView("edit");}}} 
-                  style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid rgba(168,137,63,0.2)",cursor:"pointer"}}>
-                  <div>
-                    <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{f.name}</p>
-                    {f.note && <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{f.note.slice(0,80)}{f.note.length>80?"...":""}</p>}
-                  </div>
-                  <span style={{fontFamily:"DM Mono,monospace",fontSize:11,color:"var(--gold-dark)",fontWeight:600,whiteSpace:"nowrap",marginLeft:10}}>{f.date}</span>
-                </div>
-              ))}
-              {followUpsDue.length > 5 && <p style={{fontSize:10,color:"var(--text-dim)",marginTop:8,fontStyle:"italic"}}>+ {followUpsDue.length - 5} more</p>}
-            </div>
-          )}
-
-          {/* Pipeline Funnel */}
-          <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Pipeline Funnel</p>
-          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
-            {stageData.map(s => (
-              <div key={s.id} style={{marginBottom:10}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-                    <div style={{width:10,height:10,background:s.color,borderRadius:"50%",flexShrink:0}}/>
-                    <span style={{fontFamily:"DM Mono,monospace",fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text-mid)"}}>{s.name}</span>
-                  </div>
-                  <div style={{fontSize:11,color:"var(--text-dim)",fontFamily:"DM Mono,monospace",flexShrink:0}}>
-                    <span><b style={{color:"var(--text)"}}>{s.count}</b> records</span>
-                  </div>
-                </div>
-                <div style={{background:"var(--bg2)",height:6,borderRadius:3,overflow:"hidden"}}>
-                  <div style={{height:"100%",background:s.color,width:((s.count/maxStageCount)*100)+"%",transition:"width 0.3s"}}/>
-                </div>
+        const curMonth = todayStr.slice(0,7);
+        const sellers = records.map(r => {
+          const monthBottles = (r.salesLog||[])
+            .filter(s => (s.date||"").startsWith(curMonth))
+            .reduce((sum,s) => sum + (Number(s.qty)||0), 0);
+          return { record:r, bottles: monthBottles };
+        }).filter(x => x.bottles > 0).sort((a,b) => b.bottles - a.bottles).slice(0,10);
+        const maxBottles = sellers.length > 0 ? sellers[0].bottles : 1;
+        
+        return (
+          <div>
+            <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+              <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+                <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Active Accounts</p>
+                <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--green)"}}>{activeAccounts.length}</p>
+                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>Stages 4-8</p>
               </div>
-            ))}
-          </div>
-
-          {/* Top Selling Accounts (this month) */}
-          {(() => {
-            const curMonth = today().slice(0,7);
-            const sellers = records.map(r => {
-              const monthBottles = (r.salesLog||[])
-                .filter(s => (s.date||"").startsWith(curMonth))
-                .reduce((sum,s) => sum + (Number(s.qty)||0), 0);
-              return { record:r, bottles: monthBottles };
-            }).filter(x => x.bottles > 0)
-              .sort((a,b) => b.bottles - a.bottles)
-              .slice(0,10);
+              <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+                <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Activities</p>
+                <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--navy)"}}>{thisMonthActivities.length}</p>
+                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
+              </div>
+              <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+                <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Orders Logged</p>
+                <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>{ordersThisMonth.length}</p>
+                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
+              </div>
+            </div>
             
-            if (sellers.length === 0) {
-              return (
-                <div style={{marginBottom:20}}>
-                  <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Selling Accounts — This Month</p>
-                  <div style={{background:"var(--surface)",border:"1px dashed var(--border-mid)",padding:"20px",textAlign:"center"}}>
-                    <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No bottles logged this month yet. Log sales via Sampling events or the manual logger on each account.</p>
-                  </div>
-                </div>
-              );
-            }
-            const maxBottles = sellers[0].bottles;
-            return (
-              <div style={{marginBottom:20}}>
-                <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Selling Accounts — This Month</p>
-                <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px"}}>
-                  {sellers.map((s,i) => (
-                    <div key={s.record.id} onClick={()=>{setForm(s.record);setView("edit");}} 
-                      style={{padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none",cursor:"pointer"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{s.record.name}</p>
-                          <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{s.record.city||""} {s.record.type ? "· " + s.record.type : ""}</p>
-                        </div>
-                        <p style={{fontFamily:"DM Mono,monospace",fontSize:14,fontWeight:600,color:"var(--green)",marginLeft:10}}>{s.bottles} bottles</p>
-                      </div>
-                      <div style={{background:"var(--bg2)",height:4,borderRadius:2,overflow:"hidden"}}>
-                        <div style={{height:"100%",background:"var(--green)",width:((s.bottles/maxBottles)*100)+"%"}}/>
-                      </div>
+            {followUpsDue.length > 0 && (
+              <div style={{background:"var(--warn-bg)",border:"1px solid var(--warn)",borderLeft:"4px solid var(--warn)",padding:"14px 18px",marginBottom:20}}>
+                <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--gold-dark)",textTransform:"uppercase",marginBottom:8,fontWeight:600}}>Follow-ups Due ({followUpsDue.length})</p>
+                {followUpsDue.slice(0,5).map(f => (
+                  <div key={f.id} onClick={()=>{const rec=records.find(r=>r.id===f.id);if(rec){setForm(rec);setView("edit");}}} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:"1px solid rgba(168,137,63,0.2)",cursor:"pointer"}}>
+                    <div>
+                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{f.name}</p>
+                      {f.note && <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{(f.note||"").slice(0,80)}</p>}
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-          
-          {/* Two-column layout for Top Opps and Recent Activity */}
-          <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
-{/* Recent Activity */}
-            <div style={{flex:"1 1 300px"}}>
-              <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Recent Activity</p>
-              <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px"}}>
-                {recentActivity.length === 0 && <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No activity logged yet.</p>}
-                {recentActivity.map((a,i) => (
-                  <div key={i} onClick={()=>{const rec=records.find(r=>r.id===a.recordId);if(rec){setForm(rec);setView("edit");}}} 
-                    style={{padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none",cursor:"pointer"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{a.recordName}</p>
-                      <span style={{fontSize:10,color:"var(--text-dim)",fontFamily:"DM Mono,monospace"}}>{a.date}</span>
-                    </div>
-                    <p style={{fontSize:10,color:"var(--navy)",letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:600,marginBottom:3}}>{a.type}</p>
-                    <p style={{fontSize:11,color:"var(--text-mid)",lineHeight:1.4}}>{a.note}</p>
+                    <span style={{fontFamily:"DM Mono,monospace",fontSize:11,color:"var(--gold-dark)",fontWeight:600,whiteSpace:"nowrap",marginLeft:10}}>{f.date}</span>
                   </div>
                 ))}
               </div>
+            )}
+            
+            <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Selling Accounts - This Month</p>
+            <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+              {sellers.length === 0 && <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No bottles logged this month yet.</p>}
+              {sellers.map((s,i) => (
+                <div key={s.record.id} onClick={()=>{setForm(s.record);setView("edit");}} style={{padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none",cursor:"pointer"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{s.record.name}</p>
+                      <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{s.record.city||""} {s.record.type ? "- " + s.record.type : ""}</p>
+                    </div>
+                    <p style={{fontFamily:"DM Mono,monospace",fontSize:14,fontWeight:600,color:"var(--green)",marginLeft:10}}>{s.bottles} bottles</p>
+                  </div>
+                  <div style={{background:"var(--bg2)",height:4,borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:"var(--green)",width:((s.bottles/maxBottles)*100)+"%"}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Pipeline Funnel</p>
+            <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+              {stageData.map(s => (
+                <div key={s.id} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                      <div style={{width:10,height:10,background:s.color,borderRadius:"50%",flexShrink:0}}/>
+                      <span style={{fontFamily:"DM Mono,monospace",fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text-mid)"}}>{s.name}</span>
+                    </div>
+                    <span style={{fontSize:11,color:"var(--text-dim)",fontFamily:"DM Mono,monospace"}}><b style={{color:"var(--text)"}}>{s.count}</b> records</span>
+                  </div>
+                  <div style={{background:"var(--bg2)",height:6,borderRadius:3,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:s.color,width:((s.count/maxStageCount)*100)+"%"}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Recent Activity</p>
+            <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+              {recentActivity.length === 0 && <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No activity logged yet.</p>}
+              {recentActivity.map((a,i) => (
+                <div key={i} onClick={()=>{const rec=records.find(r=>r.id===a.recordId);if(rec){setForm(rec);setView("edit");}}} style={{padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none",cursor:"pointer"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{a.recordName}</p>
+                    <span style={{fontSize:10,color:"var(--text-dim)",fontFamily:"DM Mono,monospace"}}>{a.date}</span>
+                  </div>
+                  <p style={{fontSize:10,color:"var(--navy)",letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:600,marginBottom:3}}>{a.type}</p>
+                  {a.note && <p style={{fontSize:11,color:"var(--text-mid)",lineHeight:1.4}}>{a.note}</p>}
+                </div>
+              ))}
             </div>
           </div>
-        </>);
+        );
       })()}
+
       {tab==="reports" && (() => {
         // ── Calculations ──
         const now = new Date();
