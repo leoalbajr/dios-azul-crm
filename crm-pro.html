@@ -386,6 +386,9 @@ function DiosAzulCRM() {
   const dirtyRef = useRef(false);
   const firstRenderRef = useRef(true);
   const [pendingFromUrl, setPendingFromUrl] = useState(null);
+  const [recordTab, setRecordTab] = useState("log");
+  const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0,7));
+  const [dashboardMonth, setDashboardMonth] = useState(() => new Date().toISOString().slice(0,7));
 
   useEffect(() => { try { localStorage.setItem("da_records", JSON.stringify(records)); } catch {} }, [records]);
 
@@ -748,8 +751,19 @@ function DiosAzulCRM() {
         <div className="fr1"><div><label className="fl">Notes</label><textarea className="fta" {...F("notes")}/></div></div>
         
         {view==="edit" && <>
-          <h3 style={{fontFamily:"Cormorant Garamond,serif",fontSize:18,marginTop:24,marginBottom:10,color:"var(--navy)"}}>Activity Log</h3>
-          <div className="add-activity">
+          <div style={{marginTop:24,marginBottom:14,display:"flex",gap:0,borderBottom:"1px solid var(--border)"}}>
+            <button onClick={()=>setRecordTab("log")} style={{
+              background:"none",border:"none",borderBottom:recordTab==="log"?"2px solid var(--navy)":"2px solid transparent",
+              padding:"8px 16px",fontFamily:"DM Mono,monospace",fontSize:10,letterSpacing:"0.12em",
+              textTransform:"uppercase",color:recordTab==="log"?"var(--navy)":"var(--text-dim)",cursor:"pointer"
+            }}>Activity Log</button>
+            <button onClick={()=>setRecordTab("history")} style={{
+              background:"none",border:"none",borderBottom:recordTab==="history"?"2px solid var(--navy)":"2px solid transparent",
+              padding:"8px 16px",fontFamily:"DM Mono,monospace",fontSize:10,letterSpacing:"0.12em",
+              textTransform:"uppercase",color:recordTab==="history"?"var(--navy)":"var(--text-dim)",cursor:"pointer"
+            }}>History</button>
+          </div>
+          {recordTab === "log" && <><div className="add-activity">
             <div className="fr" style={{marginBottom:10}}>
               <div style={{flex:"1 1 140px"}}>
                 <label className="fl">Date</label>
@@ -985,6 +999,121 @@ function DiosAzulCRM() {
           </div>
         </>}
         
+        {recordTab === "history" && (() => {
+          // Build monthly history aggregating activity data
+          const monthData = {};
+          (form.activityLog||[]).forEach(a => {
+            if (!a.date || a.date.length < 7) return;
+            const m = a.date.slice(0,7);
+            if (!monthData[m]) monthData[m] = {
+              month: m, visits:0, calls:0, samplings:0, activations:0, invUpdates:0, others:0,
+              bottlesSoldSamp:0, bottlesSoldCalc:0, peopleSampled:0, drinksServed:0,
+              latestInv: null, latestInvDate: null
+            };
+            const d = monthData[m];
+            if (a.type === "Visit") d.visits++;
+            else if (a.type === "Call") d.calls++;
+            else if (a.type === "Sampling") {
+              d.samplings++;
+              if (a.bottlesSold) {
+                d.bottlesSoldSamp += Object.values(a.bottlesSold).reduce((s,n)=>s+Number(n)||0,0);
+              }
+              if (a.peopleSampled) d.peopleSampled += Number(a.peopleSampled)||0;
+            } else if (a.type === "Activation") {
+              d.activations++;
+              if (a.drinksServed) d.drinksServed += Number(a.drinksServed)||0;
+            } else if (a.type === "Inventory Update") {
+              d.invUpdates++;
+              if (a.bottlesSoldCalc) {
+                d.bottlesSoldCalc += Object.values(a.bottlesSoldCalc).reduce((s,n)=>s+Number(n)||0,0);
+              }
+              if (a.newInventory && (!d.latestInvDate || a.date > d.latestInvDate)) {
+                d.latestInv = a.newInventory;
+                d.latestInvDate = a.date;
+              }
+            } else d.others++;
+          });
+          
+          const months = Object.values(monthData).sort((a,b) => b.month.localeCompare(a.month));
+          const formatMonth = (m) => {
+            const [y, mo] = m.split("-").map(Number);
+            return new Date(y, mo-1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+          };
+          
+          if (months.length === 0) {
+            return <div style={{background:"var(--surface)",border:"1px dashed var(--border-mid)",padding:24,textAlign:"center"}}>
+              <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No activity history yet for this account.</p>
+            </div>;
+          }
+          
+          // Totals across all months
+          const totals = months.reduce((acc, d) => ({
+            visits: acc.visits + d.visits,
+            calls: acc.calls + d.calls,
+            samplings: acc.samplings + d.samplings,
+            activations: acc.activations + d.activations,
+            bottlesSoldSamp: acc.bottlesSoldSamp + d.bottlesSoldSamp,
+            bottlesSoldCalc: acc.bottlesSoldCalc + d.bottlesSoldCalc,
+            peopleSampled: acc.peopleSampled + d.peopleSampled,
+            drinksServed: acc.drinksServed + d.drinksServed,
+            invUpdates: acc.invUpdates + d.invUpdates,
+          }), {visits:0,calls:0,samplings:0,activations:0,bottlesSoldSamp:0,bottlesSoldCalc:0,peopleSampled:0,drinksServed:0,invUpdates:0});
+          
+          return (
+            <div>
+              {/* Lifetime totals */}
+              <div style={{background:"var(--navy-light)",border:"1px solid var(--border)",padding:"14px 16px",marginBottom:16}}>
+                <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:8,fontWeight:600}}>Lifetime Totals</p>
+                <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:11,fontFamily:"DM Mono,monospace"}}>
+                  <span><b style={{color:"var(--navy)"}}>{totals.visits}</b> visits</span>
+                  <span><b style={{color:"var(--navy)"}}>{totals.calls}</b> calls</span>
+                  <span><b style={{color:"var(--gold-dark)"}}>{totals.samplings}</b> samplings</span>
+                  <span><b style={{color:"var(--green)"}}>{totals.activations}</b> activations</span>
+                  <span><b style={{color:"var(--navy)"}}>{totals.invUpdates}</b> inv checks</span>
+                  {totals.bottlesSoldSamp > 0 && <span><b style={{color:"var(--gold-dark)"}}>{totals.bottlesSoldSamp}</b> bottles (samplings)</span>}
+                  {totals.bottlesSoldCalc > 0 && <span><b style={{color:"var(--green)"}}>{totals.bottlesSoldCalc}</b> bottles (between visits)</span>}
+                  {totals.peopleSampled > 0 && <span><b style={{color:"var(--text-mid)"}}>{totals.peopleSampled}</b> people sampled</span>}
+                  {totals.drinksServed > 0 && <span><b style={{color:"var(--text-mid)"}}>{totals.drinksServed}</b> drinks served</span>}
+                </div>
+              </div>
+              
+              {/* Monthly breakdown */}
+              <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>By Month</p>
+              {months.map(d => (
+                <div key={d.month} style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"12px 16px",marginBottom:8}}>
+                  <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:16,fontWeight:600,color:"var(--navy)",marginBottom:8}}>{formatMonth(d.month)}</p>
+                  <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:11,fontFamily:"DM Mono,monospace",marginBottom:6}}>
+                    {d.visits > 0 && <span><b style={{color:"var(--navy)"}}>{d.visits}</b> visits</span>}
+                    {d.calls > 0 && <span><b style={{color:"var(--navy)"}}>{d.calls}</b> calls</span>}
+                    {d.samplings > 0 && <span><b style={{color:"var(--gold-dark)"}}>{d.samplings}</b> samplings</span>}
+                    {d.activations > 0 && <span><b style={{color:"var(--green)"}}>{d.activations}</b> activations</span>}
+                    {d.invUpdates > 0 && <span><b style={{color:"var(--navy)"}}>{d.invUpdates}</b> inv checks</span>}
+                  </div>
+                  {(d.bottlesSoldSamp > 0 || d.bottlesSoldCalc > 0 || d.peopleSampled > 0 || d.drinksServed > 0) && (
+                    <div style={{display:"flex",gap:14,flexWrap:"wrap",fontSize:11,fontFamily:"DM Mono,monospace",paddingTop:6,borderTop:"1px solid var(--border)"}}>
+                      {d.bottlesSoldSamp > 0 && <span style={{color:"var(--gold-dark)"}}>📦 {d.bottlesSoldSamp} bottles sold during samplings</span>}
+                      {d.bottlesSoldCalc > 0 && <span style={{color:"var(--green)"}}>💰 {d.bottlesSoldCalc} bottles sold between visits</span>}
+                      {d.peopleSampled > 0 && <span style={{color:"var(--text-mid)"}}>👥 {d.peopleSampled} people sampled</span>}
+                      {d.drinksServed > 0 && <span style={{color:"var(--text-mid)"}}>🍹 {d.drinksServed} drinks served</span>}
+                    </div>
+                  )}
+                  {d.latestInv && (
+                    <div style={{paddingTop:6,marginTop:6,borderTop:"1px solid var(--border)",fontSize:10,color:"var(--text-dim)"}}>
+                      <span style={{letterSpacing:"0.06em",textTransform:"uppercase",fontSize:9,fontWeight:600,marginRight:8}}>End-of-month Inventory ({d.latestInvDate})</span>
+                      {PRODUCTS.map(p => (
+                        <span key={p} style={{marginRight:10,fontFamily:"DM Mono,monospace"}}>
+                          <b style={{color:"var(--navy)"}}>{p}:</b> {Number(d.latestInv[p])||0}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+        </>}
+        
         <div className="action-row">
           <button className="btn-primary" onClick={save}>Save</button>
           {view==="edit" && <button className="btn-del" onClick={del}>Delete</button>}
@@ -1088,9 +1217,25 @@ function DiosAzulCRM() {
       </>}
 
       {tab==="dashboard" && (() => {
-        const thisMonth = new Date().toISOString().slice(0,7);
+        const thisMonth = dashboardMonth;
         const todayStr = today();
+        const isCurrentMonth = dashboardMonth === new Date().toISOString().slice(0,7);
         const activeAccounts = records.filter(r => ["s4","s5","s6","s7","s8"].includes(r.stage));
+        
+        // Build list of months that have any activity
+        const monthsWithActivity = new Set();
+        const curMonthKey = new Date().toISOString().slice(0,7);
+        monthsWithActivity.add(curMonthKey);
+        records.forEach(r => {
+          (r.activityLog||[]).forEach(a => {
+            if (a.date && a.date.length >= 7) monthsWithActivity.add(a.date.slice(0,7));
+          });
+        });
+        const sortedMonths = Array.from(monthsWithActivity).sort().reverse();
+        const formatMonth = (m) => {
+          const [y, mo] = m.split("-").map(Number);
+          return new Date(y, mo-1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+        };
         
         const allActivities = [];
         records.forEach(r => {
@@ -1118,7 +1263,7 @@ function DiosAzulCRM() {
         const stageData = STAGES.map(s => ({...s, count: records.filter(r => r.stage === s.id).length}));
         const maxStageCount = Math.max(...stageData.map(s => s.count), 1);
         
-        const curMonth = todayStr.slice(0,7);
+        const curMonth = thisMonth;
         const sellers = records.map(r => {
           const log = Array.isArray(r.salesLog) ? r.salesLog : (typeof r.salesLog === "string" ? (function(){try{return JSON.parse(r.salesLog);}catch(e){return [];}})() : []);
           const monthBottles = log
@@ -1130,6 +1275,12 @@ function DiosAzulCRM() {
         
         return (
           <div>
+            <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",marginBottom:14,gap:8,flexWrap:"wrap"}}>
+              <label className="fl" style={{margin:0,fontSize:9}}>Viewing:</label>
+              <select className="fs" value={dashboardMonth} onChange={e=>setDashboardMonth(e.target.value)} style={{width:"auto",minWidth:140}}>
+                {sortedMonths.map(m => <option key={m} value={m}>{formatMonth(m)}{m===curMonthKey ? " (current)" : ""}</option>)}
+              </select>
+            </div>
             <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
               <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
                 <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Active Accounts</p>
@@ -1139,12 +1290,12 @@ function DiosAzulCRM() {
               <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
                 <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Activities</p>
                 <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--navy)"}}>{thisMonthActivities.length}</p>
-                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
+                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{isCurrentMonth ? "this month" : formatMonth(dashboardMonth)}</p>
               </div>
               <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
                 <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Orders Logged</p>
                 <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>{ordersThisMonth.length}</p>
-                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>this month</p>
+                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{isCurrentMonth ? "this month" : formatMonth(dashboardMonth)}</p>
               </div>
             </div>
             
@@ -1163,7 +1314,7 @@ function DiosAzulCRM() {
               </div>
             )}
             
-            <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Selling Accounts - This Month</p>
+            <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Selling Accounts - {isCurrentMonth ? "This Month" : formatMonth(dashboardMonth)}</p>
             <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
               {sellers.length === 0 && <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No bottles logged this month yet.</p>}
               {sellers.map((s,i) => (
@@ -1221,9 +1372,25 @@ function DiosAzulCRM() {
       {tab==="reports" && (() => {
         // ── Calculations ──
         const now = new Date();
-        const thisMonth = now.toISOString().slice(0,7);
-        const lastMonthDt = new Date(now.getFullYear(), now.getMonth()-1, 1);
-        const lastMonth = lastMonthDt.toISOString().slice(0,7);
+        const thisMonth = reportMonth;  // Selected month (defaults to current)
+        const [rmYear, rmMonth] = reportMonth.split("-").map(Number);
+        const prevDt = new Date(rmYear, rmMonth-2, 1);  // month before selected
+        const lastMonth = prevDt.toISOString().slice(0,7);
+        
+        // Build list of months that have any activity for the dropdown
+        const monthsWithActivity = new Set();
+        const curMonthKey = new Date().toISOString().slice(0,7);
+        monthsWithActivity.add(curMonthKey);
+        records.forEach(r => {
+          (r.activityLog||[]).forEach(a => {
+            if (a.date && a.date.length >= 7) monthsWithActivity.add(a.date.slice(0,7));
+          });
+        });
+        const sortedMonths = Array.from(monthsWithActivity).sort().reverse();
+        const formatMonth = (m) => {
+          const [y, mo] = m.split("-").map(Number);
+          return new Date(y, mo-1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+        };
         
         // All activities across records
         const allActs = [];
@@ -1314,8 +1481,16 @@ function DiosAzulCRM() {
         };
         
         return (<>
-          <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:24,fontWeight:700,marginBottom:6,color:"var(--navy)"}}>Reports</p>
-          <p style={{fontSize:11,color:"var(--text-dim)",marginBottom:20}}>Sales performance, activity trends, and pipeline health.</p>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:10}}>
+            <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:24,fontWeight:700,color:"var(--navy)"}}>Reports</p>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <label className="fl" style={{margin:0,fontSize:9}}>Month:</label>
+              <select className="fs" value={reportMonth} onChange={e=>setReportMonth(e.target.value)} style={{width:"auto",minWidth:140}}>
+                {sortedMonths.map(m => <option key={m} value={m}>{formatMonth(m)}</option>)}
+              </select>
+            </div>
+          </div>
+          <p style={{fontSize:11,color:"var(--text-dim)",marginBottom:20}}>Sales performance, activity trends, and pipeline health for {formatMonth(reportMonth)}.</p>
           
           {/* Activity Trend Chart — last 12 weeks */}
           <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Activity (Last 12 Weeks)</p>
