@@ -97,6 +97,9 @@ body { background:var(--bg); font-family:"Inter",sans-serif; -webkit-font-smooth
 .sync-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
 .sync-dot.on { background:#4ade80; }
 .sync-dot.off { background:#9ca3af; }
+.expr-btn { padding:8px 14px; border:1.5px solid var(--border-mid); background:var(--surface); font-family:"DM Mono",monospace; font-size:10px; letter-spacing:0.08em; color:var(--text-mid); cursor:pointer; text-transform:uppercase; border-radius:4px; }
+.expr-btn.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+.expr-btn:hover { border-color:var(--navy); }
 .stage-progression { display:flex; gap:2px; margin:14px 0; }
 .stage-prog-step { flex:1; height:6px; background:var(--bg2); border-radius:3px; position:relative; }
 .stage-prog-step.done { background:var(--s8); }
@@ -603,6 +606,25 @@ function DiosAzulCRM() {
           <div><label className="fl">Cases / Month (estimate)</label><input className="fi" type="number" min="0" value={form.casesPerMonth||0} onChange={e=>setForm(p=>({...p,casesPerMonth:Number(e.target.value)}))}/></div>
           <div><label className="fl">Est. Monthly Income</label><input className="fi" value={fmt(estIncome)} readOnly style={{background:"var(--bg2)",color:"var(--gold-dark)",fontWeight:600}}/></div>
         </div>
+        <div className="fr1"><div>
+          <label className="fl">Products Carrying</label>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:2}}>
+            {["Plata","Reposado","A\u00f1ejo","Extra A\u00f1ejo"].map(p => {
+              const sel = (form.products||"").split(",").map(s=>s.trim()).filter(Boolean);
+              const on = sel.includes(p);
+              return (
+                <button key={p} type="button"
+                  className={"expr-btn"+(on?" active":"")}
+                  onClick={()=>{
+                    const nx = on ? sel.filter(s=>s!==p) : [...sel, p];
+                    setForm(pr => ({...pr, products: nx.join(", ")}));
+                  }}>
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+        </div></div>
         <div className="fr1"><div><label className="fl">Notes</label><textarea className="fta" {...F("notes")}/></div></div>
         
         {view==="edit" && <>
@@ -740,6 +762,7 @@ function DiosAzulCRM() {
             <div className="card-body">
               <p className="card-name">{r.name}</p>
               <p className="card-meta">{[r.city, r.contact, r.phone].filter(Boolean).join(" · ")}</p>
+              {r.products && <p style={{fontSize:10,color:"var(--navy)",marginTop:4,fontWeight:600,letterSpacing:"0.04em"}}>{r.products}</p>}
               {r.casesPerMonth>0 && <p className="card-cases">📦 {r.casesPerMonth} cs/mo · ${(r.casesPerMonth*COMMISSION_PER_CASE).toLocaleString()}/mo</p>}
             </div>
             <div className="card-right">
