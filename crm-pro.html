@@ -938,7 +938,225 @@ function DiosAzulCRM() {
           </div>
         </>);
       })()}
-      {tab==="reports" && <p style={{padding:40,textAlign:"center",color:"var(--text-dim)"}}>Reports coming in Pass 4 — charts, breakdowns</p>}
+      {tab==="reports" && (() => {
+        // ── Calculations ──
+        const now = new Date();
+        const thisMonth = now.toISOString().slice(0,7);
+        const lastMonthDt = new Date(now.getFullYear(), now.getMonth()-1, 1);
+        const lastMonth = lastMonthDt.toISOString().slice(0,7);
+        
+        // All activities across records
+        const allActs = [];
+        records.forEach(r => {
+          (r.activityLog||[]).forEach(a => allActs.push({...a, recordName:r.name, recordId:r.id, recordStage:r.stage, recordType:r.type}));
+        });
+        
+        // Activity counts by type (this month)
+        const thisMonthActs = allActs.filter(a => (a.date||"").startsWith(thisMonth));
+        const lastMonthActs = allActs.filter(a => (a.date||"").startsWith(lastMonth));
+        const actCountsThis = {};
+        const actCountsLast = {};
+        ACTIVITY_TYPES.forEach(t => { actCountsThis[t]=0; actCountsLast[t]=0; });
+        thisMonthActs.forEach(a => { if (actCountsThis[a.type]!==undefined) actCountsThis[a.type]++; });
+        lastMonthActs.forEach(a => { if (actCountsLast[a.type]!==undefined) actCountsLast[a.type]++; });
+        
+        // Records by type
+        const typeMap = {};
+        records.forEach(r => {
+          const t = r.type || "Unknown";
+          if (!typeMap[t]) typeMap[t] = {count:0, cases:0, activeCount:0};
+          typeMap[t].count++;
+          typeMap[t].cases += Number(r.casesPerMonth)||0;
+          if (["s4","s5","s6","s7","s8"].includes(r.stage)) typeMap[t].activeCount++;
+        });
+        
+        // Activities over last 12 weeks (for trend chart)
+        const weekBuckets = [];
+        for (let i = 11; i >= 0; i--) {
+          const wkStart = new Date(now.getTime() - i*7*24*60*60*1000);
+          const wkLabel = (wkStart.getMonth()+1) + "/" + wkStart.getDate();
+          const wkStartStr = wkStart.toISOString().slice(0,10);
+          const wkEnd = new Date(wkStart.getTime() + 7*24*60*60*1000);
+          const wkEndStr = wkEnd.toISOString().slice(0,10);
+          const count = allActs.filter(a => a.date >= wkStartStr && a.date < wkEndStr).length;
+          weekBuckets.push({label:wkLabel, count});
+        }
+        const maxWeek = Math.max(...weekBuckets.map(w=>w.count), 1);
+        
+        // Records by city
+        const cityMap = {};
+        records.forEach(r => {
+          const c = (r.city||"Unknown").split(",")[0].trim();
+          if (!cityMap[c]) cityMap[c] = {count:0, cases:0, activeCount:0};
+          cityMap[c].count++;
+          cityMap[c].cases += Number(r.casesPerMonth)||0;
+          if (["s4","s5","s6","s7","s8"].includes(r.stage)) cityMap[c].activeCount++;
+        });
+        const topCities = Object.entries(cityMap).sort((a,b)=>b[1].count-a[1].count).slice(0,10);
+        
+        // Stage breakdown
+        const stageData = STAGES.map(s => {
+          const inStage = records.filter(r => r.stage === s.id);
+          const cases = inStage.reduce((sum,r) => sum + (Number(r.casesPerMonth)||0), 0);
+          return {...s, count:inStage.length, cases, value: cases * COMMISSION_PER_CASE};
+        });
+        
+        // Time in stage (average days since stageEntered for each stage)
+        const avgTimeInStage = {};
+        STAGES.forEach(s => {
+          const inStage = records.filter(r => r.stage === s.id && r.stageEntered);
+          if (inStage.length === 0) { avgTimeInStage[s.id] = null; return; }
+          const totalDays = inStage.reduce((sum, r) => {
+            const entered = new Date(r.stageEntered);
+            const days = Math.floor((now - entered) / (1000*60*60*24));
+            return sum + days;
+          }, 0);
+          avgTimeInStage[s.id] = Math.round(totalDays / inStage.length);
+        });
+        
+        // Inactive accounts (no activity in 60+ days, currently in stages s2-s8)
+        const sixtyDaysAgo = new Date(now.getTime() - 60*24*60*60*1000).toISOString().slice(0,10);
+        const inactiveRecs = records.filter(r => {
+          if (!["s2","s3","s4","s5","s6","s7","s8"].includes(r.stage)) return false;
+          const acts = r.activityLog||[];
+          if (acts.length === 0) return true;
+          const latest = acts.map(a => a.date).sort().reverse()[0];
+          return latest < sixtyDaysAgo;
+        }).slice(0,10);
+        
+        // Total activity count by type bar widths
+        const maxActCount = Math.max(...Object.values(actCountsThis), 1);
+        const maxTypeCount = Math.max(...Object.values(typeMap).map(v => v.count), 1);
+        
+        const formatChange = (now, prev) => {
+          if (prev === 0 && now === 0) return "";
+          if (prev === 0) return "↑ new";
+          const pct = Math.round(((now - prev) / prev) * 100);
+          if (pct === 0) return "—";
+          return (pct > 0 ? "↑ " : "↓ ") + Math.abs(pct) + "%";
+        };
+        
+        return (<>
+          <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:24,fontWeight:700,marginBottom:6,color:"var(--navy)"}}>Reports</p>
+          <p style={{fontSize:11,color:"var(--text-dim)",marginBottom:20}}>Sales performance, activity trends, and pipeline health.</p>
+          
+          {/* Activity Trend Chart — last 12 weeks */}
+          <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Activity (Last 12 Weeks)</p>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"20px 24px",marginBottom:20}}>
+            <div style={{display:"flex",alignItems:"flex-end",gap:6,height:120,marginBottom:8}}>
+              {weekBuckets.map((w,i) => (
+                <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                  <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
+                    <div style={{width:"100%",height:((w.count/maxWeek)*100)+"%",background:i===11?"var(--navy)":"var(--sky)",minHeight:w.count>0?4:0,borderRadius:"2px 2px 0 0",transition:"height 0.3s"}}/>
+                  </div>
+                  <span style={{fontSize:9,color:"var(--text-dim)",fontFamily:"DM Mono,monospace"}}>{w.label}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{borderTop:"1px solid var(--border)",paddingTop:10,fontSize:11,color:"var(--text-dim)",display:"flex",justifyContent:"space-between"}}>
+              <span>Total: <b style={{color:"var(--text)"}}>{weekBuckets.reduce((s,w)=>s+w.count,0)}</b> activities</span>
+              <span>Avg/week: <b style={{color:"var(--text)"}}>{Math.round(weekBuckets.reduce((s,w)=>s+w.count,0)/12)}</b></span>
+              <span>This week: <b style={{color:"var(--navy)"}}>{weekBuckets[11].count}</b></span>
+            </div>
+          </div>
+          
+          {/* Activities by Type — this month vs last */}
+          <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Activities by Type — This Month</p>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+            {ACTIVITY_TYPES.map(t => {
+              const cur = actCountsThis[t];
+              const prev = actCountsLast[t];
+              return (
+                <div key={t} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3,gap:8}}>
+                    <span style={{fontFamily:"DM Mono,monospace",fontSize:10,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--text-mid)"}}>{t}</span>
+                    <div style={{display:"flex",gap:12,fontSize:11,fontFamily:"DM Mono,monospace"}}>
+                      <span><b style={{color:"var(--text)"}}>{cur}</b></span>
+                      <span style={{color:"var(--text-dim)",fontSize:10}}>{formatChange(cur, prev)}</span>
+                    </div>
+                  </div>
+                  <div style={{background:"var(--bg2)",height:5,borderRadius:3,overflow:"hidden"}}>
+                    <div style={{height:"100%",background:"var(--navy)",width:((cur/maxActCount)*100)+"%",transition:"width 0.3s"}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Pipeline Stage Detail */}
+          <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Pipeline Stage Detail</p>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+            {stageData.map(s => (
+              <div key={s.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderTop:s.id!=="s1"?"1px solid var(--border)":"none"}}>
+                <div style={{width:10,height:10,background:s.color,borderRadius:"50%",flexShrink:0}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{s.name}</p>
+                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>
+                    {s.count} records · {s.cases} cs/mo
+                    {avgTimeInStage[s.id]!==null && " · avg " + avgTimeInStage[s.id] + " days in stage"}
+                  </p>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0,fontFamily:"DM Mono,monospace",fontSize:12,color:"var(--gold-dark)",fontWeight:600}}>
+                  ${s.value.toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* By Type */}
+          <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>By Account Type</p>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+            {Object.entries(typeMap).sort((a,b)=>b[1].count-a[1].count).map(([t,d]) => (
+              <div key={t} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8}}>
+                  <span style={{fontFamily:"DM Mono,monospace",fontSize:10,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--text-mid)"}}>{t}</span>
+                  <div style={{display:"flex",gap:14,fontSize:11,fontFamily:"DM Mono,monospace"}}>
+                    <span><b style={{color:"var(--text)"}}>{d.count}</b> records</span>
+                    <span><b style={{color:"var(--green)"}}>{d.activeCount}</b> active</span>
+                    {d.cases > 0 && <span><b style={{color:"var(--gold-dark)"}}>{d.cases}</b> cs/mo</span>}
+                  </div>
+                </div>
+                <div style={{background:"var(--bg2)",height:5,borderRadius:3,overflow:"hidden"}}>
+                  <div style={{height:"100%",background:"var(--navy)",width:((d.count/maxTypeCount)*100)+"%"}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Top Cities */}
+          <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Cities</p>
+          <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+            {topCities.map(([c,d],i) => (
+              <div key={c} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:i>0?"1px solid var(--border)":"none"}}>
+                <div>
+                  <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{c}</p>
+                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{d.activeCount} active · {d.cases} cs/mo potential</p>
+                </div>
+                <span style={{fontFamily:"DM Mono,monospace",fontSize:14,fontWeight:600,color:"var(--navy)"}}>{d.count}</span>
+              </div>
+            ))}
+          </div>
+          
+          {/* Inactive Accounts (need attention) */}
+          {inactiveRecs.length > 0 && (
+            <>
+              <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Needs Attention — No Activity in 60+ Days</p>
+              <div style={{background:"var(--warn-bg)",border:"1px solid var(--warn)",borderLeft:"4px solid var(--warn)",padding:"14px 18px",marginBottom:20}}>
+                {inactiveRecs.map((r,i) => (
+                  <div key={r.id} onClick={()=>{setForm(r);setView("edit");}} 
+                    style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:i>0?"1px solid rgba(168,137,63,0.2)":"none",cursor:"pointer"}}>
+                    <div>
+                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{r.name}</p>
+                      <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{stageName(r.stage)} · {r.city||"—"}</p>
+                    </div>
+                    <span style={{fontSize:10,color:"var(--gold-dark)",alignSelf:"center",fontWeight:600}}>{(r.activityLog||[]).length===0?"never":"stale"}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>);
+      })()}
     </div>
 
     {showSettings && <div style={{position:"fixed",inset:0,background:"rgba(10,36,71,0.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setShowSettings(false)}>
