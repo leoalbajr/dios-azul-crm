@@ -413,7 +413,21 @@ function DiosAzulCRM() {
       let newRecords = null;
       // Prefer records tab if it exists and has data
       if (Array.isArray(data.records) && data.records.length > 0) {
-        newRecords = data.records;
+        // Normalize: convert any stringified arrays back to arrays
+        newRecords = data.records.map(r => {
+          const normalized = {...r};
+          ["activityLog","salesLog"].forEach(key => {
+            if (typeof normalized[key] === "string") {
+              try { normalized[key] = JSON.parse(normalized[key]); } catch(e) { normalized[key] = []; }
+            }
+            if (!Array.isArray(normalized[key])) normalized[key] = [];
+          });
+          // Also normalize inventory object if it came as string
+          if (typeof normalized.inventory === "string") {
+            try { normalized.inventory = JSON.parse(normalized.inventory); } catch(e) { normalized.inventory = {}; }
+          }
+          return normalized;
+        });
       } 
       // Otherwise migrate from accounts + leads on the fly
       else if ((Array.isArray(data.accounts) && data.accounts.length > 0) || (Array.isArray(data.leads) && data.leads.length > 0)) {
@@ -967,8 +981,9 @@ function DiosAzulCRM() {
         
         const curMonth = todayStr.slice(0,7);
         const sellers = records.map(r => {
-          const monthBottles = (r.salesLog||[])
-            .filter(s => (s.date||"").startsWith(curMonth))
+          const log = Array.isArray(r.salesLog) ? r.salesLog : (typeof r.salesLog === "string" ? (function(){try{return JSON.parse(r.salesLog);}catch(e){return [];}})() : []);
+          const monthBottles = log
+            .filter(s => s && (s.date||"").startsWith(curMonth))
             .reduce((sum,s) => sum + (Number(s.qty)||0), 0);
           return { record:r, bottles: monthBottles };
         }).filter(x => x.bottles > 0).sort((a,b) => b.bottles - a.bottles).slice(0,10);
