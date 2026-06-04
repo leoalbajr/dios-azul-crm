@@ -77,7 +77,6 @@ body { background:var(--bg); font-family:"Inter",sans-serif; -webkit-font-smooth
 .stage-badge.s6 { background:var(--s6); }
 .stage-badge.s7 { background:var(--s7); }
 .stage-badge.s8 { background:var(--s8); }
-.card-cases { font-size:10px; color:var(--text-dim); margin-top:4px; }
 .form-wrap { padding:0 20px 20px; }
 .form-title { font-family:"Cormorant Garamond",serif; font-size:22px; font-weight:700; color:var(--navy); padding:16px 20px 12px; }
 .fr { display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
@@ -135,9 +134,6 @@ const STAGES = [
 
 const ACTIVITY_TYPES = ["Visit","Call","Email","Sample dropped","Sampling","Activation","Order placed","Follow-up"];
 const PRODUCTS = ["Plata","Reposado","A\u00f1ejo","Extra A\u00f1ejo"];
-const DEFAULT_REORDER_THRESHOLD = 2;
-const COMMISSION_PER_CASE = 65;
-
 // Parse URL for ?add= parameter (one-tap add link from Claude)
 function getAddFromUrl() {
   try {
@@ -333,14 +329,12 @@ const MIGRATED_RECORDS = [
     ...a,
     recordType: "account",
     stage: "s8",
-    casesPerMonth: 0,
     stageEntered: a.createdAt || today(),
   })),
   ...LEADS_INIT.map(l => ({
     ...l,
     recordType: "lead",
     stage: "s1",
-    casesPerMonth: 0,
     stageEntered: l.createdAt || today(),
   }))
 ];
@@ -348,57 +342,11 @@ const MIGRATED_RECORDS = [
 const emptyRecord = {
   id:null, name:"", type:"Bar", recordType:"lead", stage:"s1",
   city:"", address:"", contact:"", phone:"", email:"",
-  casesPerMonth: 0, products:"", source:"", notes:"",
+  products:"", source:"", notes:"",
   stageEntered: today(), createdAt: today(), activityLog: [],
   inventory: {Plata:0, Reposado:0, "A\u00f1ejo":0, "Extra A\u00f1ejo":0},
-  reorderThreshold: {Plata:DEFAULT_REORDER_THRESHOLD, Reposado:DEFAULT_REORDER_THRESHOLD, "A\u00f1ejo":DEFAULT_REORDER_THRESHOLD, "Extra A\u00f1ejo":DEFAULT_REORDER_THRESHOLD},
-  bottlesGoal: {Plata:0, Reposado:0, "A\u00f1ejo":0, "Extra A\u00f1ejo":0},
   salesLog: []
 };
-
-function ManualSalesLog({ form, setForm, persist, records, view }) {
-  const [selectedProduct, setSelectedProduct] = React.useState("Plata");
-  const [qty, setQty] = React.useState(1);
-  const [logDate, setLogDate] = React.useState(today());
-  const [note, setNote] = React.useState("");
-  
-  const submit = () => {
-    if (qty <= 0) return;
-    const newEntry = { date: logDate, product: selectedProduct, qty: Number(qty), source: "manual", note: note.trim() || "" };
-    const newLog = [newEntry, ...(form.salesLog || [])];
-    // Deduct from inventory
-    const newInv = { ...(form.inventory || {}) };
-    newInv[selectedProduct] = Math.max(0, (Number(newInv[selectedProduct]) || 0) - Number(qty));
-    const updated = { ...form, salesLog: newLog, inventory: newInv };
-    setForm(updated);
-    if (view === "edit") persist(records.map(r => r.id === updated.id ? updated : r));
-    setQty(1);
-    setNote("");
-  };
-  
-  return (
-    <div style={{marginTop:10,background:"var(--surface)",padding:10,border:"1px solid var(--border)"}}>
-      <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}>
-        <div style={{flex:"1 1 100px"}}>
-          <p style={{fontSize:9,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Date</p>
-          <input className="fi" type="date" value={logDate} onChange={e=>setLogDate(e.target.value)}/>
-        </div>
-        <div style={{flex:"1 1 100px"}}>
-          <p style={{fontSize:9,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Product</p>
-          <select className="fs" value={selectedProduct} onChange={e=>setSelectedProduct(e.target.value)}>
-            {PRODUCTS.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        <div style={{flex:"1 1 70px"}}>
-          <p style={{fontSize:9,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Qty</p>
-          <input className="fi" type="number" min="1" value={qty} onChange={e=>setQty(Number(e.target.value)||0)}/>
-        </div>
-      </div>
-      <input className="fi" placeholder="Optional note (e.g. 'saw inventory down 3 since last visit')" value={note} onChange={e=>setNote(e.target.value)} style={{marginBottom:6}}/>
-      <button className="btn-primary" onClick={submit} style={{width:"100%"}}>Log Sale &amp; Update Inventory</button>
-    </div>
-  );
-}
 
 function DiosAzulCRM() {
   const [records, setRecords] = useState(() => { 
@@ -430,9 +378,7 @@ function DiosAzulCRM() {
   const [syncStatus, setSyncStatus] = useState("");
   const [autoSync, setAutoSync] = useState(() => { try { return localStorage.getItem("da_auto_sync") === "1"; } catch { return false; } });
   const [showSettings, setShowSettings] = useState(false);
-  const [monthlyGoal, setMonthlyGoal] = useState(() => { try { return parseInt(localStorage.getItem("da_monthly_goal"))||40; } catch { return 75; } });
-  const saveMonthlyGoal = (n) => { setMonthlyGoal(n); try { localStorage.setItem("da_monthly_goal", String(n)); } catch {} };
-  const toastTimer = useRef(null);
+    const toastTimer = useRef(null);
   const pushTimer = useRef(null);
   const dirtyRef = useRef(false);
   const firstRenderRef = useRef(true);
@@ -473,10 +419,10 @@ function DiosAzulCRM() {
       else if ((Array.isArray(data.accounts) && data.accounts.length > 0) || (Array.isArray(data.leads) && data.leads.length > 0)) {
         const migrated = [];
         (data.accounts || []).forEach(a => {
-          migrated.push({...a, recordType:"account", stage:"s8", casesPerMonth:Number(a.casesPerMonth)||0, stageEntered:a.createdAt||today(), activityLog:Array.isArray(a.activityLog)?a.activityLog:[]});
+          migrated.push({...a, recordType:"account", stage:"s8", stageEntered:a.createdAt||today(), activityLog:Array.isArray(a.activityLog)?a.activityLog:[]});
         });
         (data.leads || []).forEach(l => {
-          migrated.push({...l, recordType:"lead", stage:"s1", casesPerMonth:Number(l.casesPerMonth)||0, stageEntered:l.createdAt||today(), activityLog:Array.isArray(l.activityLog)?l.activityLog:[]});
+          migrated.push({...l, recordType:"lead", stage:"s1", stageEntered:l.createdAt||today(), activityLog:Array.isArray(l.activityLog)?l.activityLog:[]});
         });
         newRecords = migrated;
       }
@@ -666,7 +612,6 @@ function DiosAzulCRM() {
     };
 
     const curStageIdx = stageIdx(form.stage);
-    const estIncome = (Number(form.casesPerMonth)||0) * COMMISSION_PER_CASE;
 
     return (<div className="app">
       <div className="header"><div className="brand">
@@ -710,10 +655,7 @@ function DiosAzulCRM() {
           <div><label className="fl">Contact</label><input className="fi" {...F("contact")}/></div>
           <div><label className="fl">Email</label><input className="fi" {...F("email")}/></div>
         </div>
-        <div className="fr">
-          <div><label className="fl">Cases / Month (estimate)</label><input className="fi" type="number" min="0" value={form.casesPerMonth||0} onChange={e=>setForm(p=>({...p,casesPerMonth:Number(e.target.value)}))}/></div>
-          <div><label className="fl">Est. Monthly Income</label><input className="fi" value={fmt(estIncome)} readOnly style={{background:"var(--bg2)",color:"var(--gold-dark)",fontWeight:600}}/></div>
-        </div>
+
         <div className="fr1"><div>
           <label className="fl">Products Carrying</label>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:2}}>
@@ -733,116 +675,24 @@ function DiosAzulCRM() {
             })}
           </div>
         </div></div>
-        {/* Account Inventory & Sales */}
+        {/* Account Inventory (simple) */}
         <div style={{background:"var(--navy-light)",border:"1px solid var(--border)",padding:"14px 16px",marginBottom:14}}>
-          <p className="fl" style={{marginBottom:8}}>Inventory & Monthly Sales</p>
-          {(() => {
-            const curMonth = today().slice(0,7);
-            const monthSales = {};
-            PRODUCTS.forEach(p => { monthSales[p] = 0; });
-            (form.salesLog||[]).forEach(s => {
-              if ((s.date||"").startsWith(curMonth) && monthSales[s.product]!==undefined) {
-                monthSales[s.product] += Number(s.qty)||0;
-              }
-            });
-            const totalSold = {};
-            PRODUCTS.forEach(p => { totalSold[p] = 0; });
-            (form.salesLog||[]).forEach(s => {
-              if (totalSold[s.product]!==undefined) totalSold[s.product] += Number(s.qty)||0;
-            });
-            return (
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                {PRODUCTS.map(p => {
-                  const inv = (form.inventory && form.inventory[p]) || 0;
-                  const threshold = (form.reorderThreshold && form.reorderThreshold[p]) || DEFAULT_REORDER_THRESHOLD;
-                  const goal = (form.bottlesGoal && form.bottlesGoal[p]) || 0;
-                  const sold = monthSales[p];
-                  const lifetimeSold = totalSold[p];
-                  const isLow = inv <= threshold && inv > 0;
-                  const isEmpty = inv === 0;
-                  const goalPct = goal > 0 ? Math.min(100, (sold/goal)*100) : 0;
-                  return (
-                    <div key={p} style={{flex:"1 1 200px",background:"var(--surface)",padding:"10px 12px",border:"1px solid var(--border)"}}>
-                      <p style={{fontSize:10,fontWeight:600,color:"var(--navy)",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase"}}>
-                        {p} {isLow && <span style={{color:"var(--warn)",marginLeft:4}}>⚠</span>}{isEmpty && <span style={{color:"#c0392b",marginLeft:4}}>●</span>}
-                      </p>
-                      <div style={{display:"flex",gap:6,marginBottom:6}}>
-                        <div style={{flex:1}}>
-                          <p style={{fontSize:8,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>In Stock</p>
-                          <input className="fi" type="number" min="0" value={inv} 
-                            onChange={e=>{
-                              const newInv = {...(form.inventory||{}), [p]: Number(e.target.value)||0};
-                              setForm({...form, inventory: newInv});
-                            }}
-                            style={isLow?{borderColor:"var(--warn)",background:"var(--warn-bg)"}:isEmpty?{borderColor:"#c0392b",background:"rgba(192,57,43,0.05)"}:{}}/>
-                        </div>
-                        <div style={{flex:1}}>
-                          <p style={{fontSize:8,color:"var(--text-dim)",letterSpacing:"0.06em",textTransform:"uppercase",marginBottom:2}}>Goal/mo</p>
-                          <input className="fi" type="number" min="0" value={goal}
-                            onChange={e=>{
-                              const newG = {...(form.bottlesGoal||{}), [p]: Number(e.target.value)||0};
-                              setForm({...form, bottlesGoal: newG});
-                            }}/>
-                        </div>
-                      </div>
-                      {goal > 0 && (
-                        <div style={{marginBottom:4}}>
-                          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"var(--text-dim)",marginBottom:2}}>
-                            <span>This month</span>
-                            <span><b style={{color:"var(--text)"}}>{sold}</b> / {goal}</span>
-                          </div>
-                          <div style={{background:"var(--bg2)",height:4,borderRadius:2,overflow:"hidden"}}>
-                            <div style={{height:"100%",background:sold>=goal?"var(--green)":"var(--navy)",width:goalPct+"%"}}/>
-                          </div>
-                        </div>
-                      )}
-                      <p style={{fontSize:9,color:"var(--text-dim)",marginTop:4}}>Sold all-time: <b style={{color:"var(--gold-dark)"}}>{lifetimeSold}</b></p>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-          
-          {/* Manual Log bottles sold */}
-          <details style={{marginTop:12,fontSize:10}}>
-            <summary style={{cursor:"pointer",color:"var(--navy)",fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase"}}>+ Log bottles sold (manual)</summary>
-            <ManualSalesLog form={form} setForm={setForm} persist={persist} records={records} view={view}/>
-          </details>
-          
-          <details style={{fontSize:10,color:"var(--text-dim)",marginTop:8}}>
-            <summary style={{cursor:"pointer",letterSpacing:"0.08em",textTransform:"uppercase"}}>Reorder thresholds</summary>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
-              {PRODUCTS.map(p => {
-                const th = (form.reorderThreshold && form.reorderThreshold[p]) || DEFAULT_REORDER_THRESHOLD;
-                return (
-                  <div key={p} style={{flex:"1 1 130px"}}>
-                    <p style={{fontSize:9,color:"var(--text-dim)",marginBottom:3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{p} threshold</p>
-                    <input className="fi" type="number" min="0" value={th}
-                      onChange={e=>{
-                        const newT = {...(form.reorderThreshold||{}), [p]: Number(e.target.value)||0};
-                        setForm({...form, reorderThreshold: newT});
-                      }}/>
-                  </div>
-                );
-              })}
-            </div>
-            <p style={{fontSize:10,marginTop:6,color:"var(--text-dim)"}}>Flag fires when stock at or below threshold. Default: 2 bottles.</p>
-          </details>
-          
-          {(form.salesLog||[]).length > 0 && (
-            <details style={{fontSize:10,color:"var(--text-dim)",marginTop:8}}>
-              <summary style={{cursor:"pointer",letterSpacing:"0.08em",textTransform:"uppercase"}}>Sales history ({(form.salesLog||[]).length} entries)</summary>
-              <div style={{marginTop:8,maxHeight:200,overflowY:"auto"}}>
-                {(form.salesLog||[]).map((s,i) => (
-                  <div key={i} style={{padding:"6px 8px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",fontSize:10}}>
-                    <span><b style={{color:"var(--navy)"}}>{s.product}</b> · {s.qty} bottle{s.qty===1?"":"s"} {s.source==="sampling" && <span style={{color:"var(--gold-dark)",marginLeft:4}}>(sampling)</span>}</span>
-                    <span style={{color:"var(--text-dim)"}}>{s.date}</span>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
+          <p className="fl" style={{marginBottom:8}}>Inventory (Current Stock)</p>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {PRODUCTS.map(p => {
+              const inv = (form.inventory && form.inventory[p]) || 0;
+              return (
+                <div key={p} style={{flex:"1 1 130px"}}>
+                  <p style={{fontSize:9,color:"var(--text-dim)",marginBottom:3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{p}</p>
+                  <input className="fi" type="number" min="0" value={inv} 
+                    onChange={e=>{
+                      const newInv = {...(form.inventory||{}), [p]: Number(e.target.value)||0};
+                      setForm({...form, inventory: newInv});
+                    }}/>
+                </div>
+              );
+            })}
+          </div>
         </div>
         <div className="fr1"><div><label className="fl">Notes</label><textarea className="fta" {...F("notes")}/></div></div>
         
@@ -954,7 +804,17 @@ function DiosAzulCRM() {
               <div key={i} className="activity-item">
                 <div className="activity-item-head">
                   <span className="activity-type" style={{color:a.type==="Sampling"?"var(--gold-dark)":a.type==="Activation"?"var(--green)":"var(--navy)"}}>{a.type||"Activity"}</span>
-                  <span className="activity-date">{a.date}{a.totalHours && " · " + a.totalHours + "h"}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span className="activity-date">{a.date}{a.totalHours && " · " + a.totalHours + "h"}</span>
+                    <button onClick={(e)=>{
+                      e.stopPropagation();
+                      if (!window.confirm("Delete this activity log entry?")) return;
+                      const newLog = (form.activityLog||[]).filter((_,idx)=>idx!==i);
+                      const updated = {...form, activityLog: newLog};
+                      setForm(updated);
+                      persist(records.map(r => r.id===updated.id ? updated : r));
+                    }} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:14,padding:"2px 6px",fontWeight:600,lineHeight:1}} title="Delete this entry">×</button>
+                  </div>
                 </div>
                 {a.note && <p className="activity-note">{a.note}</p>}
                 {a.staff && <p style={{fontSize:10,color:"var(--text-mid)",marginTop:4,fontStyle:"italic"}}>👤 {a.staff}</p>}
@@ -1007,8 +867,7 @@ function DiosAzulCRM() {
         {k:"contact", l:"Contact"},
         {k:"phone", l:"Phone"},
         {k:"email", l:"Email"},
-        {k:"casesPerMonth", l:"Cases/Mo"},
-        {k:"notes", l:"Notes"}
+{k:"notes", l:"Notes"}
       ].filter(f => pendingFromUrl[f.k]).map(f => (
         <div key={f.k} style={{display:"flex",gap:14,marginBottom:5,fontSize:11}}>
           <span style={{color:"var(--text-dim)",minWidth:90,textTransform:"uppercase",letterSpacing:"0.08em",fontSize:9,paddingTop:2}}>{f.l}</span>
@@ -1064,7 +923,7 @@ function DiosAzulCRM() {
               <p className="card-name">{r.name}</p>
               <p className="card-meta">{[r.city, r.contact, r.phone].filter(Boolean).join(" · ")}</p>
               {r.products && <p style={{fontSize:10,color:"var(--navy)",marginTop:4,fontWeight:600,letterSpacing:"0.04em"}}>{r.products}</p>}
-              {r.casesPerMonth>0 && <p className="card-cases">📦 {r.casesPerMonth} cs/mo · ${(r.casesPerMonth*COMMISSION_PER_CASE).toLocaleString()}/mo</p>}
+
             </div>
             <div className="card-right">
               <span className={"stage-badge "+r.stage}>{stageName(r.stage)}</span>
@@ -1079,11 +938,7 @@ function DiosAzulCRM() {
         const now = new Date();
         const thisMonth = now.toISOString().slice(0,7);  // "2026-05"
         // Calculate pipeline metrics
-        const totalCasesEstimate = records.reduce((s,r)=>s+(Number(r.casesPerMonth)||0),0);
-        const totalPipelineValue = totalCasesEstimate * COMMISSION_PER_CASE;
         const activeAccounts = records.filter(r => ["s4","s5","s6","s7","s8"].includes(r.stage));
-        const activeCasesEstimate = activeAccounts.reduce((s,r)=>s+(Number(r.casesPerMonth)||0),0);
-        const activeIncome = activeCasesEstimate * COMMISSION_PER_CASE;
         
         // This month's activities
         const allActivities = [];
@@ -1112,63 +967,21 @@ function DiosAzulCRM() {
         // Recent activity feed
         const recentActivity = allActivities.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,8);
         
-        // Top opportunities — accounts NOT in s8 with high cases/mo estimate
-        const topOpps = records
-          .filter(r => r.stage !== "s8" && (Number(r.casesPerMonth)||0) > 0)
-          .sort((a,b)=>(Number(b.casesPerMonth)||0) - (Number(a.casesPerMonth)||0))
-          .slice(0,5);
-        
-        // Goal progress
-        const goalProgress = monthlyGoal > 0 ? Math.min(100, (activeCasesEstimate / monthlyGoal) * 100) : 0;
-        const isOnTrack = activeCasesEstimate >= monthlyGoal;
-        
-        // Stages with counts and values
+
+
+        // Stages with counts
         const stageData = STAGES.map(s => {
           const inStage = records.filter(r => r.stage === s.id);
-          const cases = inStage.reduce((sum,r) => sum + (Number(r.casesPerMonth)||0), 0);
-          return {...s, count:inStage.length, cases, value: cases * COMMISSION_PER_CASE};
+          return {...s, count:inStage.length};
         });
         const maxStageCount = Math.max(...stageData.map(s => s.count), 1);
         
         return (<>
-          {/* Field Activity Goal */}
-          {(() => {
-            const actGoalProgress = monthlyGoal > 0 ? Math.min(100, (thisMonthActivities.length / monthlyGoal) * 100) : 0;
-            const actOnTrack = thisMonthActivities.length >= monthlyGoal;
-            return (
-              <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"20px 24px",marginBottom:20}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
-                  <div>
-                    <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Field Activity Goal — This Month</p>
-                    <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:28,fontWeight:700,color:actOnTrack?"var(--green)":"var(--navy)"}}>
-                      {thisMonthActivities.length} <span style={{fontSize:18,color:"var(--text-dim)"}}>/ {monthlyGoal} activities</span>
-                    </p>
-                    <p style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>
-                      {actOnTrack ? "🎯 On track" : `${monthlyGoal - thisMonthActivities.length} away`} · Visits, calls, samplings, activations
-                    </p>
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <label className="fl" style={{margin:0}}>Target:</label>
-                    <input type="number" min="0" value={monthlyGoal} onChange={e=>saveMonthlyGoal(parseInt(e.target.value)||0)} 
-                      style={{width:80,padding:"6px 8px",border:"1px solid var(--border)",fontFamily:"DM Mono,monospace",fontSize:12,textAlign:"center"}}/>
-                  </div>
-                </div>
-                <div style={{background:"var(--bg2)",height:10,borderRadius:5,overflow:"hidden"}}>
-                  <div style={{height:"100%",background:actOnTrack?"var(--green)":"var(--navy)",width:actGoalProgress+"%",transition:"width 0.3s"}}/>
-                </div>
-                <p style={{fontSize:10,color:"var(--text-dim)",marginTop:6,textAlign:"right"}}>{Math.round(actGoalProgress)}% to target</p>
-              </div>
-            );
-          })()}
+
 
           {/* KPI Row */}
           <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"}}>
-            <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
-              <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Total Pipeline</p>
-              <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>${totalPipelineValue.toLocaleString()}<span style={{fontSize:12,color:"var(--text-dim)"}}>/mo</span></p>
-              <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{totalCasesEstimate} cases est.</p>
-            </div>
-            <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+<div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
               <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Active Accounts</p>
               <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--green)"}}>{activeAccounts.length}</p>
               <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>Stages 4–8</p>
@@ -1203,51 +1016,6 @@ function DiosAzulCRM() {
             </div>
           )}
 
-          {/* Low Inventory Alerts */}
-          {(() => {
-            const lowStock = [];
-            records.forEach(r => {
-              if (!r.inventory) return;
-              if (!["s4","s5","s6","s7","s8"].includes(r.stage)) return; // only active accounts
-              PRODUCTS.forEach(p => {
-                const inv = Number(r.inventory[p]||0);
-                const th = Number((r.reorderThreshold||{})[p]||DEFAULT_REORDER_THRESHOLD);
-                if (inv === 0) lowStock.push({record:r, product:p, inv, threshold:th, severity:"empty"});
-                else if (inv <= th) lowStock.push({record:r, product:p, inv, threshold:th, severity:"low"});
-              });
-            });
-            lowStock.sort((a,b) => {
-              if (a.severity !== b.severity) return a.severity === "empty" ? -1 : 1;
-              return a.inv - b.inv;
-            });
-            if (lowStock.length === 0) {
-              return (
-                <div style={{background:"var(--surface)",border:"1px dashed var(--border-mid)",padding:"14px 18px",marginBottom:20}}>
-                  <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4,fontWeight:600}}>Inventory Status</p>
-                  <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No low-stock alerts. Set inventory amounts on your active accounts to see warnings here when stock gets low.</p>
-                </div>
-              );
-            }
-            return (
-              <div style={{background:"#fef2f2",border:"1px solid #c0392b",borderLeft:"4px solid #c0392b",padding:"14px 18px",marginBottom:20}}>
-                <p style={{fontSize:9,letterSpacing:"0.12em",color:"#c0392b",textTransform:"uppercase",marginBottom:8,fontWeight:600}}>⚠ {lowStock.length} Low/Empty Inventory Alert{lowStock.length===1?"":"s"}</p>
-                {lowStock.slice(0,8).map((alert,i) => (
-                  <div key={i} onClick={()=>{setForm(alert.record);setView("edit");}} 
-                    style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:i>0?"1px solid rgba(192,57,43,0.15)":"none",cursor:"pointer"}}>
-                    <div>
-                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{alert.record.name}</p>
-                      <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{alert.product} · threshold {alert.threshold}</p>
-                    </div>
-                    <span style={{fontFamily:"DM Mono,monospace",fontSize:12,color:alert.severity==="empty"?"#c0392b":"var(--warn)",fontWeight:600,alignSelf:"center"}}>
-                      {alert.severity==="empty" ? "OUT" : alert.inv + " left"}
-                    </span>
-                  </div>
-                ))}
-                {lowStock.length > 8 && <p style={{fontSize:10,color:"var(--text-dim)",marginTop:8,fontStyle:"italic"}}>+ {lowStock.length - 8} more</p>}
-              </div>
-            );
-          })()}
-
           {/* Pipeline Funnel */}
           <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Pipeline Funnel</p>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
@@ -1258,9 +1026,8 @@ function DiosAzulCRM() {
                     <div style={{width:10,height:10,background:s.color,borderRadius:"50%",flexShrink:0}}/>
                     <span style={{fontFamily:"DM Mono,monospace",fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase",color:"var(--text-mid)"}}>{s.name}</span>
                   </div>
-                  <div style={{display:"flex",gap:14,fontSize:11,color:"var(--text-dim)",fontFamily:"DM Mono,monospace",flexShrink:0}}>
+                  <div style={{fontSize:11,color:"var(--text-dim)",fontFamily:"DM Mono,monospace",flexShrink:0}}>
                     <span><b style={{color:"var(--text)"}}>{s.count}</b> records</span>
-                    {s.cases > 0 && <span><b style={{color:"var(--gold-dark)"}}>{s.cases}</b> cs/mo</span>}
                   </div>
                 </div>
                 <div style={{background:"var(--bg2)",height:6,borderRadius:3,overflow:"hidden"}}>
@@ -1319,27 +1086,7 @@ function DiosAzulCRM() {
           
           {/* Two-column layout for Top Opps and Recent Activity */}
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
-            {/* Top Opportunities */}
-            <div style={{flex:"1 1 300px"}}>
-              <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Opportunities</p>
-              <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px"}}>
-                {topOpps.length === 0 && <p style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>No accounts with cases/mo estimates yet. Add estimates to pending accounts to see opportunities.</p>}
-                {topOpps.map((r,i) => (
-                  <div key={r.id} onClick={()=>{setForm(r);setView("edit");}} style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:i>0?"1px solid var(--border)":"none",cursor:"pointer"}}>
-                    <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{r.name}</p>
-                      <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{stageName(r.stage)} · {r.type}</p>
-                    </div>
-                    <div style={{textAlign:"right",flexShrink:0,marginLeft:10}}>
-                      <p style={{fontFamily:"DM Mono,monospace",fontSize:13,fontWeight:600,color:"var(--gold-dark)"}}>{r.casesPerMonth} cs/mo</p>
-                      <p style={{fontSize:10,color:"var(--text-dim)"}}>${(r.casesPerMonth*COMMISSION_PER_CASE).toLocaleString()}/mo</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Recent Activity */}
+{/* Recent Activity */}
             <div style={{flex:"1 1 300px"}}>
               <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Recent Activity</p>
               <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px"}}>
@@ -1386,9 +1133,8 @@ function DiosAzulCRM() {
         const typeMap = {};
         records.forEach(r => {
           const t = r.type || "Unknown";
-          if (!typeMap[t]) typeMap[t] = {count:0, cases:0, activeCount:0};
+          if (!typeMap[t]) typeMap[t] = {count:0, activeCount:0};
           typeMap[t].count++;
-          typeMap[t].cases += Number(r.casesPerMonth)||0;
           if (["s4","s5","s6","s7","s8"].includes(r.stage)) typeMap[t].activeCount++;
         });
         
@@ -1409,9 +1155,8 @@ function DiosAzulCRM() {
         const cityMap = {};
         records.forEach(r => {
           const c = (r.city||"Unknown").split(",")[0].trim();
-          if (!cityMap[c]) cityMap[c] = {count:0, cases:0, activeCount:0};
+          if (!cityMap[c]) cityMap[c] = {count:0, activeCount:0};
           cityMap[c].count++;
-          cityMap[c].cases += Number(r.casesPerMonth)||0;
           if (["s4","s5","s6","s7","s8"].includes(r.stage)) cityMap[c].activeCount++;
         });
         const topCities = Object.entries(cityMap).sort((a,b)=>b[1].count-a[1].count).slice(0,10);
@@ -1419,8 +1164,7 @@ function DiosAzulCRM() {
         // Stage breakdown
         const stageData = STAGES.map(s => {
           const inStage = records.filter(r => r.stage === s.id);
-          const cases = inStage.reduce((sum,r) => sum + (Number(r.casesPerMonth)||0), 0);
-          return {...s, count:inStage.length, cases, value: cases * COMMISSION_PER_CASE};
+          return {...s, count:inStage.length};
         });
         
         // Time in stage (average days since stageEntered for each stage)
@@ -1593,12 +1337,9 @@ function DiosAzulCRM() {
                 <div style={{flex:1,minWidth:0}}>
                   <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{s.name}</p>
                   <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>
-                    {s.count} records · {s.cases} cs/mo
+                    {s.count} records
                     {avgTimeInStage[s.id]!==null && " · avg " + avgTimeInStage[s.id] + " days in stage"}
                   </p>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0,fontFamily:"DM Mono,monospace",fontSize:12,color:"var(--gold-dark)",fontWeight:600}}>
-                  ${s.value.toLocaleString()}
                 </div>
               </div>
             ))}
@@ -1614,7 +1355,6 @@ function DiosAzulCRM() {
                   <div style={{display:"flex",gap:14,fontSize:11,fontFamily:"DM Mono,monospace"}}>
                     <span><b style={{color:"var(--text)"}}>{d.count}</b> records</span>
                     <span><b style={{color:"var(--green)"}}>{d.activeCount}</b> active</span>
-                    {d.cases > 0 && <span><b style={{color:"var(--gold-dark)"}}>{d.cases}</b> cs/mo</span>}
                   </div>
                 </div>
                 <div style={{background:"var(--bg2)",height:5,borderRadius:3,overflow:"hidden"}}>
@@ -1631,7 +1371,7 @@ function DiosAzulCRM() {
               <div key={c} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:i>0?"1px solid var(--border)":"none"}}>
                 <div>
                   <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{c}</p>
-                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{d.activeCount} active · {d.cases} cs/mo potential</p>
+                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{d.activeCount} active</p>
                 </div>
                 <span style={{fontFamily:"DM Mono,monospace",fontSize:14,fontWeight:600,color:"var(--navy)"}}>{d.count}</span>
               </div>
