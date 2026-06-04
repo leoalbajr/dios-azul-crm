@@ -133,7 +133,9 @@ const STAGES = [
   {id:"s8", name:"Continued Support",     color:"var(--s8)", desc:"Active account, ongoing relationship"},
 ];
 
-const ACTIVITY_TYPES = ["Visit","Call","Email","Sample dropped","Tasting event","Order placed","Follow-up"];
+const ACTIVITY_TYPES = ["Visit","Call","Email","Sample dropped","Sampling","Activation","Order placed","Follow-up"];
+const PRODUCTS = ["Plata","Reposado","A\u00f1ejo","Extra A\u00f1ejo"];
+const DEFAULT_REORDER_THRESHOLD = 2;
 const COMMISSION_PER_CASE = 65;
 
 // Parse URL for ?add= parameter (one-tap add link from Claude)
@@ -347,7 +349,9 @@ const emptyRecord = {
   id:null, name:"", type:"Bar", recordType:"lead", stage:"s1",
   city:"", address:"", contact:"", phone:"", email:"",
   casesPerMonth: 0, products:"", source:"", notes:"",
-  stageEntered: today(), createdAt: today(), activityLog: []
+  stageEntered: today(), createdAt: today(), activityLog: [],
+  inventory: {Plata:0, Reposado:0, "A\u00f1ejo":0, "Extra A\u00f1ejo":0},
+  reorderThreshold: {Plata:DEFAULT_REORDER_THRESHOLD, Reposado:DEFAULT_REORDER_THRESHOLD, "A\u00f1ejo":DEFAULT_REORDER_THRESHOLD, "Extra A\u00f1ejo":DEFAULT_REORDER_THRESHOLD}
 };
 
 function DiosAzulCRM() {
@@ -367,6 +371,13 @@ function DiosAzulCRM() {
   const [activityNote, setActivityNote] = useState("");
   const [activityDate, setActivityDate] = useState(today());
   const [followupDate, setFollowupDate] = useState("");
+  // Structured fields for Sampling & Activation
+  const [eventStartTime, setEventStartTime] = useState("");
+  const [eventEndTime, setEventEndTime] = useState("");
+  const [eventProducts, setEventProducts] = useState([]);
+  const [bottlesSold, setBottlesSold] = useState({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
+  const [peopleSampled, setPeopleSampled] = useState(0);
+  const [drinksServed, setDrinksServed] = useState(0);
   const [saveToast, setSaveToast] = useState(false);
   const [syncUrl, setSyncUrl] = useState(() => { try { return localStorage.getItem("da_sync_url") || ""; } catch { return ""; } });
   const [syncStatus, setSyncStatus] = useState("");
@@ -539,7 +550,8 @@ function DiosAzulCRM() {
       persist(records.map(r => r.id===u.id ? u : r));
     };
     const addActivity = () => {
-      if (!activityNote.trim()) return;
+      const isStructured = activityType === "Sampling" || activityType === "Activation";
+      if (!isStructured && !activityNote.trim()) return;
       const log = Array.isArray(form.activityLog) ? form.activityLog : [];
       const entry = {
         date: activityDate || today(),
@@ -547,14 +559,43 @@ function DiosAzulCRM() {
         note: activityNote.trim()
       };
       if (followupDate) entry.followupDate = followupDate;
+      if (isStructured) {
+        if (eventStartTime) entry.startTime = eventStartTime;
+        if (eventEndTime) entry.endTime = eventEndTime;
+        if (eventStartTime && eventEndTime) {
+          const [sh, sm] = eventStartTime.split(":").map(Number);
+          const [eh, em] = eventEndTime.split(":").map(Number);
+          const mins = (eh*60+em) - (sh*60+sm);
+          if (mins > 0) entry.totalHours = (mins/60).toFixed(1);
+        }
+        if (eventProducts.length > 0) entry.products = eventProducts;
+        if (activityType === "Sampling") {
+          const sold = {};
+          let totalSold = 0;
+          Object.entries(bottlesSold).forEach(([p,n]) => {
+            if (Number(n) > 0) { sold[p] = Number(n); totalSold += Number(n); }
+          });
+          if (totalSold > 0) entry.bottlesSold = sold;
+          if (peopleSampled > 0) entry.peopleSampled = Number(peopleSampled);
+        }
+        if (activityType === "Activation") {
+          if (drinksServed > 0) entry.drinksServed = Number(drinksServed);
+        }
+      }
       const updated = {...form, activityLog: [entry, ...log]};
-      // If a follow-up date was set, also update the record's nextFollowUp field
       if (followupDate) updated.nextFollowUp = followupDate;
       setForm(updated);
       if (view==="edit") persist(records.map(r => r.id===updated.id ? updated : r));
+      // Reset
       setActivityNote("");
       setActivityDate(today());
       setFollowupDate("");
+      setEventStartTime("");
+      setEventEndTime("");
+      setEventProducts([]);
+      setBottlesSold({Plata:0,Reposado:0,"A\u00f1ejo":0,"Extra A\u00f1ejo":0});
+      setPeopleSampled(0);
+      setDrinksServed(0);
     };
 
     const curStageIdx = stageIdx(form.stage);
@@ -625,6 +666,50 @@ function DiosAzulCRM() {
             })}
           </div>
         </div></div>
+        {/* Account Inventory Tracker */}
+        <div style={{background:"var(--navy-light)",border:"1px solid var(--border)",padding:"14px 16px",marginBottom:14}}>
+          <p className="fl" style={{marginBottom:8}}>Account Inventory (current stock)</p>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+            {PRODUCTS.map(p => {
+              const inv = (form.inventory && form.inventory[p]) || 0;
+              const threshold = (form.reorderThreshold && form.reorderThreshold[p]) || DEFAULT_REORDER_THRESHOLD;
+              const isLow = inv <= threshold && inv > 0;
+              const isEmpty = inv === 0;
+              return (
+                <div key={p} style={{flex:"1 1 130px"}}>
+                  <p style={{fontSize:9,color:"var(--text-dim)",marginBottom:3,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                    {p} {isLow && <span style={{color:"var(--warn)",marginLeft:4}}>⚠</span>}{isEmpty && <span style={{color:"#c0392b",marginLeft:4}}>●</span>}
+                  </p>
+                  <input className="fi" type="number" min="0" value={inv} 
+                    onChange={e=>{
+                      const newInv = {...(form.inventory||{}), [p]: Number(e.target.value)||0};
+                      setForm({...form, inventory: newInv});
+                    }}
+                    style={isLow?{borderColor:"var(--warn)",background:"var(--warn-bg)"}:isEmpty?{borderColor:"#c0392b",background:"rgba(192,57,43,0.05)"}:{}}/>
+                </div>
+              );
+            })}
+          </div>
+          <details style={{fontSize:10,color:"var(--text-dim)"}}>
+            <summary style={{cursor:"pointer",letterSpacing:"0.08em",textTransform:"uppercase"}}>Reorder thresholds</summary>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
+              {PRODUCTS.map(p => {
+                const th = (form.reorderThreshold && form.reorderThreshold[p]) || DEFAULT_REORDER_THRESHOLD;
+                return (
+                  <div key={p} style={{flex:"1 1 130px"}}>
+                    <p style={{fontSize:9,color:"var(--text-dim)",marginBottom:3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{p} threshold</p>
+                    <input className="fi" type="number" min="0" value={th}
+                      onChange={e=>{
+                        const newT = {...(form.reorderThreshold||{}), [p]: Number(e.target.value)||0};
+                        setForm({...form, reorderThreshold: newT});
+                      }}/>
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{fontSize:10,marginTop:6,color:"var(--text-dim)"}}>Flag fires when stock at or below threshold. Default: 2 bottles.</p>
+          </details>
+        </div>
         <div className="fr1"><div><label className="fl">Notes</label><textarea className="fta" {...F("notes")}/></div></div>
         
         {view==="edit" && <>
@@ -642,9 +727,77 @@ function DiosAzulCRM() {
                 </select>
               </div>
             </div>
+            
+            {/* Structured fields for Sampling and Activation */}
+            {(activityType === "Sampling" || activityType === "Activation") && <>
+              <div className="fr" style={{marginBottom:10}}>
+                <div style={{flex:"1 1 90px"}}>
+                  <label className="fl">Start Time</label>
+                  <input className="fi" type="time" value={eventStartTime} onChange={e=>setEventStartTime(e.target.value)}/>
+                </div>
+                <div style={{flex:"1 1 90px"}}>
+                  <label className="fl">End Time</label>
+                  <input className="fi" type="time" value={eventEndTime} onChange={e=>setEventEndTime(e.target.value)}/>
+                </div>
+                <div style={{flex:"1 1 90px",display:"flex",alignItems:"flex-end"}}>
+                  <input className="fi" readOnly value={(() => {
+                    if (!eventStartTime || !eventEndTime) return "";
+                    const [sh,sm] = eventStartTime.split(":").map(Number);
+                    const [eh,em] = eventEndTime.split(":").map(Number);
+                    const mins = (eh*60+em) - (sh*60+sm);
+                    return mins > 0 ? (mins/60).toFixed(1) + " hrs" : "";
+                  })()} placeholder="Total hrs" style={{background:"var(--bg2)",fontWeight:600,color:"var(--navy)"}}/>
+                </div>
+              </div>
+              
+              <div style={{marginBottom:10}}>
+                <label className="fl">{activityType === "Sampling" ? "Products Sampled" : "Products Poured"}</label>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:2}}>
+                  {PRODUCTS.map(p => {
+                    const on = eventProducts.includes(p);
+                    return (
+                      <button key={p} type="button"
+                        className={"expr-btn"+(on?" active":"")}
+                        onClick={()=>{
+                          setEventProducts(on ? eventProducts.filter(x=>x!==p) : [...eventProducts, p]);
+                        }}>
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              {activityType === "Sampling" && <>
+                <div style={{marginBottom:10}}>
+                  <label className="fl">Bottles Sold During Sampling</label>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {PRODUCTS.map(p => (
+                      <div key={p} style={{flex:"1 1 120px"}}>
+                        <p style={{fontSize:9,color:"var(--text-dim)",marginBottom:3,letterSpacing:"0.08em",textTransform:"uppercase"}}>{p}</p>
+                        <input className="fi" type="number" min="0" value={bottlesSold[p]||0} 
+                          onChange={e=>setBottlesSold({...bottlesSold,[p]:Number(e.target.value)||0})}/>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{marginBottom:10}}>
+                  <label className="fl">People Sampled (approx)</label>
+                  <input className="fi" type="number" min="0" value={peopleSampled||0} onChange={e=>setPeopleSampled(Number(e.target.value)||0)}/>
+                </div>
+              </>}
+              
+              {activityType === "Activation" && <>
+                <div style={{marginBottom:10}}>
+                  <label className="fl">Total Drinks Served</label>
+                  <input className="fi" type="number" min="0" value={drinksServed||0} onChange={e=>setDrinksServed(Number(e.target.value)||0)}/>
+                </div>
+              </>}
+            </>}
+            
             <div style={{marginBottom:10}}>
               <label className="fl">Note</label>
-              <textarea className="fta" placeholder={`What happened? (e.g. dropped 2 samples, spoke with manager...)`} value={activityNote} onChange={e=>setActivityNote(e.target.value)} style={{minHeight:60}}/>
+              <textarea className="fta" placeholder={`What happened?`} value={activityNote} onChange={e=>setActivityNote(e.target.value)} style={{minHeight:60}}/>
             </div>
             <div className="fr" style={{marginBottom:10}}>
               <div style={{flex:"1 1 140px"}}>
@@ -661,10 +814,18 @@ function DiosAzulCRM() {
             {(form.activityLog||[]).map((a,i) => (
               <div key={i} className="activity-item">
                 <div className="activity-item-head">
-                  <span className="activity-type" style={{color:"var(--navy)"}}>{a.type||"Activity"}</span>
-                  <span className="activity-date">{a.date}</span>
+                  <span className="activity-type" style={{color:a.type==="Sampling"?"var(--gold-dark)":a.type==="Activation"?"var(--green)":"var(--navy)"}}>{a.type||"Activity"}</span>
+                  <span className="activity-date">{a.date}{a.totalHours && " · " + a.totalHours + "h"}</span>
                 </div>
-                <p className="activity-note">{a.note}</p>
+                {a.note && <p className="activity-note">{a.note}</p>}
+                {a.products && a.products.length > 0 && <p style={{fontSize:10,color:"var(--navy)",marginTop:4,fontWeight:600}}>🥃 {a.products.join(", ")}</p>}
+                {a.bottlesSold && (() => {
+                  const items = Object.entries(a.bottlesSold).filter(([_,n])=>n>0);
+                  const total = items.reduce((s,[_,n])=>s+n,0);
+                  return <p style={{fontSize:10,color:"var(--gold-dark)",marginTop:4,fontWeight:600}}>📦 Sold {total} bottles: {items.map(([p,n])=>`${p} ${n}`).join(", ")}</p>;
+                })()}
+                {a.peopleSampled && <p style={{fontSize:10,color:"var(--text-mid)",marginTop:4}}>👥 {a.peopleSampled} people sampled</p>}
+                {a.drinksServed && <p style={{fontSize:10,color:"var(--green)",marginTop:4,fontWeight:600}}>🍹 {a.drinksServed} drinks served</p>}
                 {a.followupDate && <p style={{fontSize:10,color:"var(--gold-dark)",marginTop:6,fontWeight:600}}>📅 Follow-up: {a.followupDate}</p>}
               </div>
             ))}
@@ -896,6 +1057,44 @@ function DiosAzulCRM() {
             </div>
           )}
 
+          {/* Low Inventory Alerts */}
+          {(() => {
+            const lowStock = [];
+            records.forEach(r => {
+              if (!r.inventory) return;
+              if (!["s4","s5","s6","s7","s8"].includes(r.stage)) return; // only active accounts
+              PRODUCTS.forEach(p => {
+                const inv = Number(r.inventory[p]||0);
+                const th = Number((r.reorderThreshold||{})[p]||DEFAULT_REORDER_THRESHOLD);
+                if (inv === 0) lowStock.push({record:r, product:p, inv, threshold:th, severity:"empty"});
+                else if (inv <= th) lowStock.push({record:r, product:p, inv, threshold:th, severity:"low"});
+              });
+            });
+            lowStock.sort((a,b) => {
+              if (a.severity !== b.severity) return a.severity === "empty" ? -1 : 1;
+              return a.inv - b.inv;
+            });
+            if (lowStock.length === 0) return null;
+            return (
+              <div style={{background:"#fef2f2",border:"1px solid #c0392b",borderLeft:"4px solid #c0392b",padding:"14px 18px",marginBottom:20}}>
+                <p style={{fontSize:9,letterSpacing:"0.12em",color:"#c0392b",textTransform:"uppercase",marginBottom:8,fontWeight:600}}>⚠ {lowStock.length} Low/Empty Inventory Alert{lowStock.length===1?"":"s"}</p>
+                {lowStock.slice(0,8).map((alert,i) => (
+                  <div key={i} onClick={()=>{setForm(alert.record);setView("edit");}} 
+                    style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:i>0?"1px solid rgba(192,57,43,0.15)":"none",cursor:"pointer"}}>
+                    <div>
+                      <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:15,fontWeight:600}}>{alert.record.name}</p>
+                      <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{alert.product} · threshold {alert.threshold}</p>
+                    </div>
+                    <span style={{fontFamily:"DM Mono,monospace",fontSize:12,color:alert.severity==="empty"?"#c0392b":"var(--warn)",fontWeight:600,alignSelf:"center"}}>
+                      {alert.severity==="empty" ? "OUT" : alert.inv + " left"}
+                    </span>
+                  </div>
+                ))}
+                {lowStock.length > 8 && <p style={{fontSize:10,color:"var(--text-dim)",marginTop:8,fontStyle:"italic"}}>+ {lowStock.length - 8} more</p>}
+              </div>
+            );
+          })()}
+
           {/* Pipeline Funnel */}
           <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Pipeline Funnel</p>
           <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
@@ -1082,6 +1281,81 @@ function DiosAzulCRM() {
               <span>This week: <b style={{color:"var(--navy)"}}>{weekBuckets[11].count}</b></span>
             </div>
           </div>
+          
+          {/* Event Impact — Samplings & Activations */}
+          {(() => {
+            const allActsAll = [];
+            records.forEach(r => (r.activityLog||[]).forEach(a => allActsAll.push({...a, recordName:r.name})));
+            const samplings = allActsAll.filter(a => a.type === "Sampling");
+            const activations = allActsAll.filter(a => a.type === "Activation");
+            const thisMonthSamplings = samplings.filter(a => (a.date||"").startsWith(thisMonth));
+            const thisMonthActivations = activations.filter(a => (a.date||"").startsWith(thisMonth));
+            const totalBottlesSold = samplings.reduce((s,a) => s + (a.bottlesSold ? Object.values(a.bottlesSold).reduce((x,y)=>x+y,0) : 0), 0);
+            const monthBottlesSold = thisMonthSamplings.reduce((s,a) => s + (a.bottlesSold ? Object.values(a.bottlesSold).reduce((x,y)=>x+y,0) : 0), 0);
+            const totalDrinks = activations.reduce((s,a) => s + (Number(a.drinksServed)||0), 0);
+            const monthDrinks = thisMonthActivations.reduce((s,a) => s + (Number(a.drinksServed)||0), 0);
+            const totalPeople = samplings.reduce((s,a) => s + (Number(a.peopleSampled)||0), 0);
+            const monthPeople = thisMonthSamplings.reduce((s,a) => s + (Number(a.peopleSampled)||0), 0);
+            
+            if (samplings.length === 0 && activations.length === 0) return null;
+            
+            // Top sampling venues by bottles sold
+            const venueMap = {};
+            samplings.forEach(a => {
+              const total = a.bottlesSold ? Object.values(a.bottlesSold).reduce((x,y)=>x+y,0) : 0;
+              if (!venueMap[a.recordName]) venueMap[a.recordName] = {bottles:0, events:0, people:0};
+              venueMap[a.recordName].bottles += total;
+              venueMap[a.recordName].events++;
+              venueMap[a.recordName].people += (Number(a.peopleSampled)||0);
+            });
+            const topVenues = Object.entries(venueMap).sort((a,b)=>b[1].bottles-a[1].bottles).slice(0,5);
+            
+            return <>
+              <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Event Impact</p>
+              <div style={{display:"flex",gap:12,marginBottom:14,flexWrap:"wrap"}}>
+                <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+                  <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Samplings</p>
+                  <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>{samplings.length}</p>
+                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{thisMonthSamplings.length} this month</p>
+                </div>
+                <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+                  <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Bottles Sold</p>
+                  <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--green)"}}>{totalBottlesSold}</p>
+                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{monthBottlesSold} this month</p>
+                </div>
+                <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+                  <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>People Reached</p>
+                  <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--navy)"}}>{totalPeople}</p>
+                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{monthPeople} this month</p>
+                </div>
+                <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+                  <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Activations</p>
+                  <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--gold-dark)"}}>{activations.length}</p>
+                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{thisMonthActivations.length} this month</p>
+                </div>
+                <div style={{flex:"1 1 140px",background:"var(--surface)",border:"1px solid var(--border)",padding:"14px 18px"}}>
+                  <p style={{fontSize:9,letterSpacing:"0.12em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:4}}>Drinks Served</p>
+                  <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:22,fontWeight:700,color:"var(--green)"}}>{totalDrinks}</p>
+                  <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{monthDrinks} this month</p>
+                </div>
+              </div>
+              
+              {topVenues.length > 0 && <>
+                <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Top Sampling Venues (by Bottles Sold)</p>
+                <div style={{background:"var(--surface)",border:"1px solid var(--border)",padding:"16px 20px",marginBottom:20}}>
+                  {topVenues.map(([name,d],i) => (
+                    <div key={name} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:i>0?"1px solid var(--border)":"none"}}>
+                      <div>
+                        <p style={{fontFamily:"Cormorant Garamond,serif",fontSize:14,fontWeight:600}}>{name}</p>
+                        <p style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{d.events} event{d.events===1?"":"s"} · {d.people} people sampled</p>
+                      </div>
+                      <span style={{fontFamily:"DM Mono,monospace",fontSize:14,fontWeight:600,color:"var(--gold-dark)"}}>{d.bottles} bottles</span>
+                    </div>
+                  ))}
+                </div>
+              </>}
+            </>;
+          })()}
           
           {/* Activities by Type — this month vs last */}
           <p style={{fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:10}}>Activities by Type — This Month</p>
